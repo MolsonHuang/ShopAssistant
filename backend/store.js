@@ -22,6 +22,9 @@ const orderColumns = [
   'customerPhone',
   'contactName',
   'paymentMethod',
+  'paidStatus',
+  'paidAmount',
+  'accountingNotes',
   'companyAddress',
   'deliveryAddress',
   'orderTime',
@@ -100,7 +103,12 @@ function normalizeProduct(payload) {
 }
 
 function listOrders() {
-  return db.prepare('SELECT * FROM orders WHERE deletedAt IS NULL ORDER BY createdAt DESC').all().map(getPayload);
+  return db.prepare('SELECT * FROM orders WHERE deletedAt IS NULL ORDER BY createdAt DESC').all().map((row) => {
+    const order = getPayload(row);
+    order.statusStats = getOrderStatusStats(order.id);
+    order.total = getOrderTotal(order.id);
+    return order;
+  });
 }
 
 function getOrder(id) {
@@ -111,26 +119,40 @@ function getOrder(id) {
 }
 
 function createOrder(payload) {
-  const data = normalizeOrder(payload);
-  const keys = orderColumns;
-  const result = db
-    .prepare(`INSERT INTO orders (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`)
-    .run(...keys.map((key) => data[key]));
-  const id = Number(result.lastInsertRowid);
-  replaceOrderItems(id, payload.items || []);
-  addHistory('order_history', 'orderId', id, 'created', payload);
-  return getOrder(id);
+  db.exec('BEGIN');
+  try {
+    const data = normalizeOrder(payload);
+    const keys = orderColumns;
+    const result = db
+      .prepare(`INSERT INTO orders (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`)
+      .run(...keys.map((key) => data[key]));
+    const id = Number(result.lastInsertRowid);
+    replaceOrderItems(id, payload.items || []);
+    addHistory('order_history', 'orderId', id, 'created', payload);
+    db.exec('COMMIT');
+    return getOrder(id);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function updateOrder(id, payload) {
   if (!getOrder(id)) return null;
-  const data = normalizeOrder(payload);
-  db.prepare(
-    `UPDATE orders SET ${orderColumns.map((key) => `${key} = ?`).join(', ')}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-  ).run(...orderColumns.map((key) => data[key]), id);
-  replaceOrderItems(id, payload.items || []);
-  addHistory('order_history', 'orderId', id, 'updated', payload);
-  return getOrder(id);
+  db.exec('BEGIN');
+  try {
+    const data = normalizeOrder(payload);
+    db.prepare(
+      `UPDATE orders SET ${orderColumns.map((key) => `${key} = ?`).join(', ')}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+    ).run(...orderColumns.map((key) => data[key]), id);
+    replaceOrderItems(id, payload.items || []);
+    addHistory('order_history', 'orderId', id, 'updated', payload);
+    db.exec('COMMIT');
+    return getOrder(id);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function deleteOrder(id) {
@@ -156,6 +178,9 @@ function normalizeOrder(payload) {
     customerPhone: payload.customerPhone || payload.phone || '',
     contactName: payload.contactName || '',
     paymentMethod: payload.paymentMethod || '',
+    paidStatus: payload.paidStatus || 'unpaid',
+    paidAmount: asNumber(payload.paidAmount),
+    accountingNotes: payload.accountingNotes || '',
     companyAddress: payload.companyAddress || '',
     deliveryAddress: payload.deliveryAddress || payload.customerAddress || '',
     orderTime: payload.orderTime || '',
@@ -174,8 +199,10 @@ function replaceOrderItems(orderId, items) {
     `INSERT INTO order_items (
       orderId, productId, barcode, customerItemNo, factoryItemNo, productImagePath, exportImagePath,
       productDescription, innerPack, cartonQty, cartons, unitPrice, cbmPerCarton, unitPieces,
-      totalCbm, totalPieces, totalAmount, sortOrder
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      totalCbm, totalPieces, totalAmount, lengthCm, widthCm, heightCm, grossWeight, netWeight,
+      deliveryStatus, inspectionStatus, supplyStatus, warehouseStatus, deliveredCartons, signatureFilePath,
+      deliveryNotes, sortOrder
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   items.forEach((item, index) => {
@@ -198,6 +225,18 @@ function replaceOrderItems(orderId, items) {
       normalized.totalCbm,
       normalized.totalPieces,
       normalized.totalAmount,
+      normalized.lengthCm,
+      normalized.widthCm,
+      normalized.heightCm,
+      normalized.grossWeight,
+      normalized.netWeight,
+      normalized.deliveryStatus,
+      normalized.inspectionStatus,
+      normalized.supplyStatus,
+      normalized.warehouseStatus,
+      normalized.deliveredCartons,
+      normalized.signatureFilePath,
+      normalized.deliveryNotes,
       index
     );
   });
@@ -207,11 +246,15 @@ function normalizeOrderItem(item) {
   const cartonQty = Math.round(asNumber(item.cartonQty));
   const cartons = Math.round(asNumber(item.cartons || item.quantity));
   const unitPrice = asNumber(item.unitPrice || item.price);
-  const cbmPerCarton = asNumber(item.cbmPerCarton);
+  const lengthCm = asNumber(item.lengthCm);
+  const widthCm = asNumber(item.widthCm);
+  const heightCm = asNumber(item.heightCm);
+  const calculatedCbm = lengthCm && widthCm && heightCm ? (lengthCm * widthCm * heightCm) / 1000000 : 0;
+  const cbmPerCarton = asNumber(item.cbmPerCarton) || calculatedCbm;
   const unitPieces = Math.round(asNumber(item.unitPieces));
   const totalPieces = Math.round(asNumber(item.totalPieces || cartonQty * cartons));
   const totalCbm = asNumber(item.totalCbm || cbmPerCarton * cartons);
-  const totalAmount = asNumber(item.totalAmount || cartons * unitPrice);
+  const totalAmount = asNumber(item.totalAmount || cartonQty * cartons * unitPrice);
 
   return {
     productId: item.productId ? Number(item.productId) : null,
@@ -229,8 +272,50 @@ function normalizeOrderItem(item) {
     unitPieces,
     totalCbm,
     totalPieces,
-    totalAmount
+    totalAmount,
+    lengthCm,
+    widthCm,
+    heightCm,
+    grossWeight: asNumber(item.grossWeight),
+    netWeight: asNumber(item.netWeight),
+    deliveryStatus: item.deliveryStatus || 'pending',
+    inspectionStatus: item.inspectionStatus || 'pending',
+    supplyStatus: item.supplyStatus || 'normal',
+    warehouseStatus: item.warehouseStatus || 'not_arrived',
+    deliveredCartons: Math.round(asNumber(item.deliveredCartons)),
+    signatureFilePath: item.signatureFilePath || '',
+    deliveryNotes: item.deliveryNotes || ''
   };
+}
+
+function getOrderStatusStats(orderId) {
+  const rows = db.prepare(
+    `SELECT deliveryStatus, inspectionStatus, supplyStatus, warehouseStatus, COUNT(*) AS count
+     FROM order_items WHERE orderId = ?
+     GROUP BY deliveryStatus, inspectionStatus, supplyStatus, warehouseStatus`
+  ).all(orderId);
+  const stats = {
+    total: 0,
+    delivered: 0,
+    pending: 0,
+    arrived: 0,
+    failed: 0,
+    unavailable: 0
+  };
+  rows.forEach((row) => {
+    stats.total += row.count;
+    if (row.deliveryStatus === 'delivered') stats.delivered += row.count;
+    if (row.deliveryStatus === 'pending') stats.pending += row.count;
+    if (row.warehouseStatus === 'arrived') stats.arrived += row.count;
+    if (row.inspectionStatus === 'failed') stats.failed += row.count;
+    if (row.supplyStatus === 'unavailable') stats.unavailable += row.count;
+  });
+  return stats;
+}
+
+function getOrderTotal(orderId) {
+  const row = db.prepare('SELECT SUM(totalAmount) AS total FROM order_items WHERE orderId = ?').get(orderId);
+  return asNumber(row && row.total);
 }
 
 function getOrderHistory(orderId) {

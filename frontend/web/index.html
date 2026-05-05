@@ -7,173 +7,172 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="top">
-        <div>
-          <h1>订单录入与导出</h1>
-          <p>电脑批量上传照片、填写或导入表格；手机按卡片拍照录入，扫码后自动带出商品基础资料。</p>
-        </div>
-        <button id="refreshAll" class="ghost">刷新</button>
-      </header>
+    <main class="layout">
+      <aside id="sidebar" class="sidebar">
+        <h1>ShopAssistant</h1>
+        <button class="nav active" data-tab="orders">订单表格</button>
+        <button class="nav" data-tab="products">商品库</button>
+        <button class="nav" data-tab="delivery">送货仓库</button>
+        <button class="nav" data-tab="accounting">会计统计</button>
+        <button class="nav" data-tab="settings">权限设置</button>
+      </aside>
 
-      <nav class="tabs">
-        <button class="tab active" data-tab="orders">订单</button>
-        <button class="tab" data-tab="products">商品库</button>
-        <button class="tab" data-tab="inventory">库存</button>
-        <button class="tab" data-tab="delivery">送货</button>
-      </nav>
+      <section class="workspace">
+        <header class="topbar">
+          <button id="menuToggle" class="ghost menu-btn">功能</button>
+          <div>
+            <strong id="pageTitle">订单表格</strong>
+            <span id="roleHint">当前角色：老板，可见全部页面</span>
+          </div>
+          <button id="refreshAll" class="ghost">刷新</button>
+        </header>
 
-      <section id="orders" class="view active">
-        <form id="orderForm" class="panel wide">
-          <h2>订单信息</h2>
-          <input type="hidden" name="id" />
-          <div class="pair">
-            <label>单号<input name="orderNo" placeholder="留空自动生成" /></label>
-            <label>客户名称<input name="customerName" required /></label>
-          </div>
-          <div class="pair">
-            <label>电话<input name="customerPhone" /></label>
-            <label>联系人<input name="contactName" /></label>
-          </div>
-          <div class="pair">
-            <label>付款方式<input name="paymentMethod" /></label>
-            <label>下单时间<input name="orderTime" type="date" /></label>
-          </div>
-          <div class="pair">
-            <label>送货时间<input name="deliveryTime" type="date" /></label>
-            <label>类型
-              <select name="type">
-                <option value="order">订单</option>
-                <option value="quote">报价单</option>
-              </select>
-            </label>
-          </div>
-          <label>公司地址<input name="companyAddress" /></label>
-          <label>送货地址<input name="deliveryAddress" /></label>
-          <label>备注<textarea name="notes"></textarea></label>
-
-          <div class="upload-grid">
-            <label>正唛图片<input id="frontMarkUpload" type="file" accept="image/*" capture="environment" /></label>
-            <label>侧唛图片<input id="sideMarkUpload" type="file" accept="image/*" capture="environment" /></label>
-            <label>条码图片/文件<input id="barcodeUpload" type="file" accept="image/*,.pdf,.xls,.xlsx" /></label>
-          </div>
-          <input type="hidden" name="frontMarkImagePath" />
-          <input type="hidden" name="sideMarkImagePath" />
-          <input type="hidden" name="barcodeFilePath" />
-
-          <div class="line-title">
-            <h2>产品明细</h2>
-            <div class="actions compact-actions">
-              <button id="batchImages" type="button" class="ghost">批量照片</button>
-              <button id="addItem" type="button" class="round">+</button>
+        <section id="orders" class="view active">
+          <form id="orderForm" class="panel">
+            <input type="hidden" name="id" />
+            <div class="contract-head">
+              <div>
+                <h2>义乌市展邦圣诞工艺品合同</h2>
+                <p>Yiwu Zhanbang Christmas Ornaments Sales Confirmation</p>
+              </div>
+              <label>客户名称<input name="customerName" required /></label>
+              <label>单号<input name="orderNo" placeholder="留空自动生成" /></label>
             </div>
-          </div>
-          <input id="batchImagesInput" type="file" accept="image/*" multiple hidden />
-          <div id="orderItems" class="item-list"></div>
-          <div class="total">
-            <span>总体积：<b id="totalCbm">0.000</b></span>
-            <span>总件数：<b id="totalPieces">0</b></span>
-            <span>总金额：<b id="orderTotal">0.00</b></span>
-          </div>
-          <div class="actions">
-            <button class="primary" type="submit">保存订单</button>
-            <button id="exportExcel" type="button" class="ghost">导出 Excel</button>
-            <button id="exportPdf" type="button" class="ghost">导出 PDF</button>
-          </div>
-        </form>
 
-        <section class="panel">
-          <h2>订单列表</h2>
-          <div id="orderList" class="list"></div>
+            <div class="form-grid">
+              <label>采购联系人<input name="contactName" /></label>
+              <label>采购联系电话<input name="customerPhone" /></label>
+              <label>付款方式<input name="paymentMethod" /></label>
+              <label>下单日期<input name="orderTime" type="date" /></label>
+              <label>公司地址<input name="companyAddress" /></label>
+              <label>交货地址<input name="deliveryAddress" /></label>
+              <label>交货日期<input name="deliveryTime" type="date" /></label>
+              <label>付款状态
+                <select name="paidStatus">
+                  <option value="unpaid">未付款</option>
+                  <option value="partial">部分付款</option>
+                  <option value="paid">已付款</option>
+                </select>
+              </label>
+              <label>已付金额<input name="paidAmount" type="number" step="0.01" value="0" /></label>
+            </div>
+
+            <div class="mark-grid">
+              <label>正唛图片<input id="frontMarkUpload" type="file" accept="image/*" capture="environment" /></label>
+              <label>侧唛图片<input id="sideMarkUpload" type="file" accept="image/*" capture="environment" /></label>
+              <label>条码/附件<input id="barcodeUpload" type="file" accept="image/*,.pdf,.xls,.xlsx" /></label>
+            </div>
+            <input type="hidden" name="frontMarkImagePath" />
+            <input type="hidden" name="sideMarkImagePath" />
+            <input type="hidden" name="barcodeFilePath" />
+
+            <div class="table-tools">
+              <div>
+                <button id="addRow" type="button" class="primary">添加行</button>
+                <button id="batchImages" type="button" class="ghost">批量照片</button>
+                <input id="batchImagesInput" type="file" accept="image/*" multiple hidden />
+              </div>
+              <div>
+                <button id="saveOrder" type="submit" class="primary">保存订单</button>
+                <button id="exportExcel" type="button" class="ghost">导出 Excel</button>
+                <button id="exportPdf" type="button" class="ghost">导出 PDF</button>
+              </div>
+            </div>
+
+            <div class="sheet-wrap">
+              <table id="orderSheet" class="order-sheet">
+                <thead>
+                  <tr>
+                    <th>操作</th>
+                    <th>客人货号<br><small>ITEM NO</small></th>
+                    <th>图片<br><small>Picture</small></th>
+                    <th>工厂货号<br><small>Factory Item No.</small></th>
+                    <th>描述<br><small>Description</small></th>
+                    <th>单位<br><small>Unit</small></th>
+                    <th>件数<br><small>CTN</small></th>
+                    <th>装箱数<br><small>QTY/CTN</small></th>
+                    <th>单价<br><small>Unit Price</small></th>
+                    <th>总金额<br><small>Total Amount</small></th>
+                    <th>单件体积<br><small>CBM/CTN</small></th>
+                    <th>总体积<br><small>Total CBM</small></th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="sheetBody"></tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="6">合计</td>
+                    <td id="sumCartons">0</td>
+                    <td id="sumPieces">0</td>
+                    <td></td>
+                    <td id="sumAmount">0.00</td>
+                    <td></td>
+                    <td id="sumCbm">0.000</td>
+                    <td id="sumStatus"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div id="mobileItems" class="mobile-items"></div>
+          </form>
+
+          <section class="panel side-panel">
+            <h2>订单列表</h2>
+            <div id="orderList" class="list"></div>
+          </section>
         </section>
-      </section>
 
-      <section id="products" class="view">
-        <form id="productForm" class="panel">
-          <h2>商品库</h2>
-          <input type="hidden" name="id" />
-          <label>条形码<input name="barcode" /></label>
-          <label>厂家货号<input name="factoryItemNo" required /></label>
-          <label>产品照片<input id="productImageUpload" type="file" accept="image/*" capture="environment" /></label>
-          <input type="hidden" name="productImagePath" />
-          <input type="hidden" name="exportImagePath" />
-          <label>产品描述<textarea name="description"></textarea></label>
-          <div class="pair">
-            <label>内装<input name="innerPack" /></label>
-            <label>装箱数<input name="cartonQty" type="number" value="0" /></label>
-          </div>
-          <div class="pair">
-            <label>单件体积<input name="cbmPerCarton" type="number" step="0.001" value="0" /></label>
-            <label>单件件数<input name="unitPieces" type="number" value="0" /></label>
-          </div>
-          <div class="pair">
-            <label>库存<input name="stock" type="number" value="0" /></label>
-            <label>货位<input name="location" /></label>
-          </div>
-          <button class="primary" type="submit">保存商品</button>
-        </form>
-        <section class="panel">
-          <h2>商品列表</h2>
-          <div id="productList" class="list"></div>
+        <section id="products" class="view">
+          <section class="panel full">
+            <h2>商品库</h2>
+            <div id="productList" class="list grid-list"></div>
+          </section>
         </section>
-      </section>
 
-      <section id="inventory" class="view">
-        <section class="panel full">
-          <h2>库存概览</h2>
-          <input id="inventorySearch" placeholder="按商品名或条码搜索" />
-          <div id="inventoryList" class="list"></div>
+        <section id="delivery" class="view">
+          <section class="panel full">
+            <h2>送货与仓库验货</h2>
+            <div id="deliveryList" class="delivery-grid"></div>
+          </section>
         </section>
-      </section>
 
-      <section id="delivery" class="view">
-        <section class="panel full">
-          <h2>今日送货</h2>
-          <div id="deliveryList" class="list"></div>
+        <section id="accounting" class="view">
+          <section class="panel full">
+            <h2>会计统计</h2>
+            <div id="accountingSummary" class="summary-grid"></div>
+            <div id="accountingList" class="list"></div>
+          </section>
+        </section>
+
+        <section id="settings" class="view">
+          <section class="panel full">
+            <h2>权限设置</h2>
+            <div class="role-grid">
+              <label>选择角色
+                <select id="roleSelect">
+                  <option value="boss">老板：全部页面</option>
+                  <option value="sales">业务/跟单：订单、仓库、送货</option>
+                  <option value="warehouse">仓管：送货仓库、库存</option>
+                  <option value="accounting">会计：会计统计、订单列表</option>
+                </select>
+              </label>
+            </div>
+            <p class="muted">微信扫码登录需要微信开放平台/公众号或企业微信配置回调域名。当前先预留角色权限框架，接入微信登录后可按账号绑定角色。</p>
+          </section>
         </section>
       </section>
     </main>
 
-    <template id="itemTemplate">
-      <article class="item-card">
-        <div class="item-head">
-          <strong class="item-title">产品</strong>
-          <button type="button" class="danger remove-item">删除</button>
+    <dialog id="itemDialog">
+      <form method="dialog" class="dialog-card">
+        <h2>编辑产品</h2>
+        <div id="dialogFields"></div>
+        <div class="actions">
+          <button id="saveDialogItem" type="button" class="primary">保存到表格</button>
+          <button type="button" class="ghost" onclick="document.getElementById('itemDialog').close()">取消</button>
         </div>
-        <div class="pair">
-          <label>条码<input name="barcode" placeholder="扫码或输入条码" /></label>
-          <div class="scan-actions">
-            <button type="button" class="ghost scan">扫码</button>
-            <button type="button" class="ghost lookup">查商品</button>
-          </div>
-        </div>
-        <label>产品照片<input name="photoFile" type="file" accept="image/*" capture="environment" /></label>
-        <input type="hidden" name="productId" />
-        <input type="hidden" name="productImagePath" />
-        <input type="hidden" name="exportImagePath" />
-        <div class="photo-preview"></div>
-        <div class="pair">
-          <label>客人货号<input name="customerItemNo" /></label>
-          <label>厂家货号<input name="factoryItemNo" /></label>
-        </div>
-        <label>产品描述<textarea name="productDescription"></textarea></label>
-        <div class="grid-3">
-          <label>内装<input name="innerPack" /></label>
-          <label>装箱数<input name="cartonQty" type="number" value="0" /></label>
-          <label>件数<input name="cartons" type="number" value="0" /></label>
-        </div>
-        <div class="grid-3">
-          <label>单价<input name="unitPrice" type="number" step="0.01" value="0" /></label>
-          <label>单件体积<input name="cbmPerCarton" type="number" step="0.001" value="0" /></label>
-          <label>单件件数<input name="unitPieces" type="number" value="0" /></label>
-        </div>
-        <div class="grid-3">
-          <label>总体积<input name="totalCbm" type="number" step="0.001" value="0" /></label>
-          <label>总件数<input name="totalPieces" type="number" value="0" /></label>
-          <label>总金额<input name="totalAmount" type="number" step="0.01" value="0" /></label>
-        </div>
-      </article>
-    </template>
+      </form>
+    </dialog>
 
     <div id="scannerModal" class="scanner-modal" hidden>
       <div class="scanner-box">
