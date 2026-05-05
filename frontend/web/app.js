@@ -4,7 +4,9 @@ const state = {
   orders: [],
   items: [],
   editingIndex: null,
-  role: localStorage.getItem('role') || 'boss'
+  role: localStorage.getItem('role') || 'boss',
+  roleConfig: null,
+  tableConfig: null
 };
 
 const fields = [
@@ -15,11 +17,38 @@ const fields = [
   'deliveryNotes'
 ];
 
-const rolePages = {
-  boss: ['orders', 'products', 'delivery', 'accounting', 'settings'],
-  sales: ['orders', 'delivery'],
-  warehouse: ['delivery', 'products'],
-  accounting: ['accounting', 'orders']
+const pageLabels = {
+  orders: '订单表格',
+  products: '商品库',
+  delivery: '送货仓库',
+  accounting: '会计统计',
+  settings: '权限设置'
+};
+
+const defaultRoleConfig = {
+  boss: { name: '老板', pages: ['orders', 'products', 'delivery', 'accounting', 'settings'] },
+  sales: { name: '业务/跟单', pages: ['orders', 'delivery', 'products'] },
+  warehouse: { name: '仓管', pages: ['delivery', 'products'] },
+  accounting: { name: '会计', pages: ['accounting', 'orders'] }
+};
+
+const defaultTableConfig = {
+  rowHeight: 64,
+  columns: [
+    { key: '_actions', label: '操作', width: 96, type: 'actions', locked: true },
+    { key: 'customerItemNo', label: '客人货号', subLabel: 'ITEM NO', width: 110, type: 'text' },
+    { key: 'productImagePath', label: '图片', subLabel: 'Picture', width: 110, type: 'image' },
+    { key: 'factoryItemNo', label: '工厂货号', subLabel: 'Factory Item No.', width: 120, type: 'text' },
+    { key: 'productDescription', label: '描述', subLabel: 'Description', width: 220, type: 'textarea' },
+    { key: 'innerPack', label: '单位', subLabel: 'Unit', width: 80, type: 'text' },
+    { key: 'cartons', label: '件数', subLabel: 'CTN', width: 80, type: 'number', total: 'sum' },
+    { key: 'cartonQty', label: '装箱数', subLabel: 'QTY/CTN', width: 90, type: 'number', totalKey: 'totalPieces' },
+    { key: 'unitPrice', label: '单价', subLabel: 'Unit Price', width: 90, type: 'number', step: '0.01' },
+    { key: 'totalAmount', label: '总金额', subLabel: 'Total Amount', width: 100, type: 'formula', formula: 'cartonQty*cartons*unitPrice', total: 'sum', decimals: 2 },
+    { key: 'cbmPerCarton', label: '单件体积', subLabel: 'CBM/CTN', width: 110, type: 'volume' },
+    { key: 'totalCbm', label: '总体积', subLabel: 'Total CBM', width: 100, type: 'formula', formula: 'cbmPerCarton*cartons', total: 'sum', decimals: 3 },
+    { key: '_status', label: '状态', width: 120, type: 'status' }
+  ]
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -41,6 +70,53 @@ async function uploadFiles(kind, files) {
   [...files].forEach((file) => form.append('files', file));
   const data = await request(`/uploads/${kind}`, { method: 'POST', body: form });
   return data.files;
+}
+
+async function loadSettings() {
+  const [tableSetting, roleSetting] = await Promise.all([
+    request('/settings/orderTableConfig').catch(() => ({ value: null })),
+    request('/settings/roleConfig').catch(() => ({ value: null }))
+  ]);
+  state.tableConfig = tableSetting.value || structuredClone(defaultTableConfig);
+  state.roleConfig = roleSetting.value || structuredClone(defaultRoleConfig);
+  syncConfigEditors();
+}
+
+async function saveSetting(key, value) {
+  const saved = await request(`/settings/${key}`, { method: 'PUT', body: { value } });
+  return saved.value;
+}
+
+function syncConfigEditors() {
+  $('#rolesConfig').value = JSON.stringify(state.roleConfig, null, 2);
+  $('#tableConfig').value = JSON.stringify(state.tableConfig, null, 2);
+}
+
+async function saveRolesConfig() {
+  const parsed = JSON.parse($('#rolesConfig').value);
+  state.roleConfig = await saveSetting('roleConfig', parsed);
+  if (!state.roleConfig[state.role]) state.role = Object.keys(state.roleConfig)[0] || 'boss';
+  localStorage.setItem('role', state.role);
+  applyRole();
+}
+
+async function saveTableConfig() {
+  const parsed = JSON.parse($('#tableConfig').value);
+  state.tableConfig = await saveSetting('orderTableConfig', parsed);
+  renderSheet();
+}
+
+async function resetConfig() {
+  if (!confirm('确认恢复默认表格和角色配置？')) return;
+  state.tableConfig = structuredClone(defaultTableConfig);
+  state.roleConfig = structuredClone(defaultRoleConfig);
+  await Promise.all([
+    saveSetting('orderTableConfig', state.tableConfig),
+    saveSetting('roleConfig', state.roleConfig)
+  ]);
+  syncConfigEditors();
+  applyRole();
+  renderSheet();
 }
 
 function emptyItem(data = {}) {
@@ -83,13 +159,31 @@ function calcItem(item) {
     : 0;
   const rawCbm = String(item.cbmPerCarton ?? '');
   const cbmPerCarton = Number(rawCbm || 0) || dimCbm;
-  return {
+  const computed = {
     ...item,
     cbmPerCarton: rawCbm.endsWith('.') ? item.cbmPerCarton : round(cbmPerCarton, 3),
     totalPieces: Math.round(cartons * cartonQty),
     totalCbm: round(cartons * cbmPerCarton, 3),
     totalAmount: round(cartons * cartonQty * unitPrice, 2)
   };
+  getColumns()
+    .filter((column) => column.type === 'formula' && column.formula)
+    .forEach((column) => {
+      const value = evaluateFormula(column.formula, computed);
+      computed[column.key] = round(value, Number(column.decimals ?? 2));
+    });
+  return computed;
+}
+
+function evaluateFormula(formula, row) {
+  if (!/^[\w\s+\-*/().]+$/.test(formula)) return 0;
+  const expression = formula.replace(/[A-Za-z_]\w*/g, (key) => Number(row[key] || 0));
+  if (!/^[\d\s+\-*/().]+$/.test(expression)) return 0;
+  try {
+    return Function(`"use strict"; return (${expression});`)();
+  } catch (error) {
+    return 0;
+  }
 }
 
 function round(value, digits) {
@@ -120,22 +214,36 @@ function statusClass(value) {
 }
 
 function setTab(name) {
-  if (!rolePages[state.role].includes(name)) return;
+  const pages = getAllowedPages();
+  if (name !== 'settings' && !pages.includes(name)) return;
   $$('.nav').forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === name));
   $$('.view').forEach((view) => view.classList.toggle('active', view.id === name));
-  $('#pageTitle').textContent = $('.nav.active')?.textContent || '工作台';
+  $('#pageTitle').textContent = pageLabels[name] || $('.nav.active')?.textContent || '工作台';
   $('#sidebar').classList.remove('open');
 }
 
 function applyRole() {
+  renderRoleOptions();
+  const pages = getAllowedPages();
   $$('.nav').forEach((tab) => {
-    tab.hidden = !rolePages[state.role].includes(tab.dataset.tab);
+    tab.hidden = tab.dataset.tab !== 'settings' && !pages.includes(tab.dataset.tab);
   });
-  $('#roleSelect').value = state.role;
-  const roleName = $('#roleSelect').selectedOptions[0].textContent.split('：')[0];
+  $('#activeRoleSelect').value = state.role;
+  const roleName = state.roleConfig[state.role]?.name || state.role;
   $('#roleHint').textContent = `当前角色：${roleName}`;
   const active = $('.nav.active');
-  if (!active || active.hidden) setTab(rolePages[state.role][0]);
+  if (!active || active.hidden) setTab(pages[0] || 'orders');
+}
+
+function getAllowedPages() {
+  return state.roleConfig?.[state.role]?.pages || defaultRoleConfig.boss.pages;
+}
+
+function renderRoleOptions() {
+  const options = Object.entries(state.roleConfig || defaultRoleConfig)
+    .map(([key, role]) => `<option value="${key}">${role.name || key}</option>`)
+    .join('');
+  $('#activeRoleSelect').innerHTML = options;
 }
 
 function formData(form) {
@@ -150,40 +258,65 @@ function setForm(form, data) {
 
 function renderSheet() {
   state.items = state.items.map(calcItem);
+  renderSheetStructure();
   $('#sheetBody').innerHTML = state.items.map((item, index) => rowHtml(item, index)).join('');
   $('#mobileItems').innerHTML = state.items.map((item, index) => mobileItemHtml(item, index)).join('');
   bindSheetEvents();
   updateTotals();
 }
 
+function renderSheetStructure() {
+  const columns = getColumns();
+  $('#sheetCols').innerHTML = columns.map((column) => `<col style="width:${Number(column.width || 100)}px">`).join('');
+  $('#sheetHead').innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label || column.key)}${column.subLabel ? `<br><small>${escapeHtml(column.subLabel)}</small>` : ''}</th>`).join('')}</tr>`;
+  $('#sheetFoot').innerHTML = `<tr>${columns.map((column, index) => {
+    if (index === 0) return '<td>合计</td>';
+    if (column.total === 'sum') return `<td data-sum="${column.key}">0</td>`;
+    if (column.totalKey) return `<td data-sum="${column.totalKey}">0</td>`;
+    return '<td></td>';
+  }).join('')}</tr>`;
+}
+
+function getColumns() {
+  return (state.tableConfig || defaultTableConfig).columns || defaultTableConfig.columns;
+}
+
 function rowHtml(item, index) {
   return `
     <tr data-index="${index}" class="${item.inspectionStatus === 'failed' || item.supplyStatus === 'unavailable' ? 'row-warn' : ''}">
-      <td><div class="row-actions">
-        <button type="button" data-action="up">↑</button>
-        <button type="button" data-action="down">↓</button>
-        <button type="button" data-action="copy">复</button>
-        <button type="button" data-action="delete">删</button>
-        <button type="button" data-action="scan">扫</button>
-        <button type="button" data-action="lookup">查</button>
-      </div></td>
-      ${inputCell('customerItemNo', item.customerItemNo)}
-      <td class="pic-cell">${imageHtml(item.productImagePath)}<input type="file" accept="image/*" data-field="photoFile"></td>
-      ${inputCell('factoryItemNo', item.factoryItemNo)}
-      <td><textarea data-field="productDescription">${item.productDescription || ''}</textarea></td>
-      ${inputCell('innerPack', item.innerPack)}
-      ${inputCell('cartons', item.cartons, 'number')}
-      ${inputCell('cartonQty', item.cartonQty, 'number')}
-      ${inputCell('unitPrice', item.unitPrice, 'number', '0.01')}
-      <td data-total="amount">${money(item.totalAmount)}</td>
-      <td>
-        <input data-field="cbmPerCarton" type="number" step="0.001" value="${item.cbmPerCarton || 0}">
-        <button type="button" data-action="volume" class="ghost">体积</button>
-      </td>
-      <td data-total="cbm">${Number(item.totalCbm || 0).toFixed(3)}</td>
-      <td>${statusPills(item)}</td>
+      ${getColumns().map((column) => cellHtml(column, item)).join('')}
     </tr>
   `;
+}
+
+function cellHtml(column, item) {
+  if (column.type === 'actions') {
+    return `<td><div class="row-actions">
+      <button type="button" data-action="up">↑</button>
+      <button type="button" data-action="down">↓</button>
+      <button type="button" data-action="copy">复</button>
+      <button type="button" data-action="delete">删</button>
+      <button type="button" data-action="scan">扫</button>
+      <button type="button" data-action="lookup">查</button>
+    </div></td>`;
+  }
+  if (column.type === 'image') {
+    return `<td class="pic-cell">${imageHtml(item[column.key])}<input type="file" accept="image/*" data-field="photoFile"></td>`;
+  }
+  if (column.type === 'textarea') {
+    return `<td><textarea data-field="${column.key}">${escapeHtml(item[column.key] || '')}</textarea></td>`;
+  }
+  if (column.type === 'formula') {
+    const decimals = Number(column.decimals ?? 2);
+    return `<td data-computed="${column.key}">${Number(item[column.key] || 0).toFixed(decimals)}</td>`;
+  }
+  if (column.type === 'volume') {
+    return `<td><input data-field="${column.key}" type="number" step="${column.step || '0.001'}" value="${escapeHtml(item[column.key] ?? 0)}"><button type="button" data-action="volume" class="ghost">体积</button></td>`;
+  }
+  if (column.type === 'status') {
+    return `<td>${statusPills(item)}</td>`;
+  }
+  return inputCell(column.key, item[column.key], column.type === 'number' ? 'number' : 'text', column.step || '');
 }
 
 function inputCell(field, value, type = 'text', step = '') {
@@ -240,8 +373,10 @@ function bindSheetEvents() {
 
 function updateRowComputed(row, index) {
   const item = calcItem(state.items[index]);
-  row.querySelector('[data-total="amount"]').textContent = money(item.totalAmount);
-  row.querySelector('[data-total="cbm"]').textContent = Number(item.totalCbm || 0).toFixed(3);
+  getColumns().forEach((column) => {
+    const cell = row.querySelector(`[data-computed="${column.key}"]`);
+    if (cell) cell.textContent = Number(item[column.key] || 0).toFixed(Number(column.decimals ?? 2));
+  });
 }
 
 async function uploadItemPhoto(index, files) {
@@ -348,17 +483,19 @@ function stopScanner() {
 function updateTotals() {
   const totals = state.items.reduce((sum, item) => {
     const row = calcItem(item);
-    sum.cartons += Number(row.cartons || 0);
-    sum.pieces += Number(row.totalPieces || 0);
-    sum.amount += Number(row.totalAmount || 0);
-    sum.cbm += Number(row.totalCbm || 0);
+    Object.keys(row).forEach((key) => {
+      if (typeof row[key] === 'number') {
+        sum[key] = (sum[key] || 0) + Number(row[key] || 0);
+      }
+    });
     return sum;
-  }, { cartons: 0, pieces: 0, amount: 0, cbm: 0 });
-  $('#sumCartons').textContent = totals.cartons;
-  $('#sumPieces').textContent = totals.pieces;
-  $('#sumAmount').textContent = money(totals.amount);
-  $('#sumCbm').textContent = totals.cbm.toFixed(3);
-  $('#sumStatus').textContent = `${state.items.filter((i) => i.deliveryStatus === 'delivered').length}/${state.items.length} 已送`;
+  }, {});
+  $$('[data-sum]').forEach((cell) => {
+    const key = cell.dataset.sum;
+    const column = getColumns().find((item) => item.key === key || item.totalKey === key);
+    const decimals = Number(column?.decimals ?? (key.toLowerCase().includes('amount') ? 2 : key.toLowerCase().includes('cbm') ? 3 : 0));
+    cell.textContent = Number(totals[key] || 0).toFixed(decimals);
+  });
 }
 
 async function saveOrder(event) {
@@ -559,7 +696,7 @@ async function refreshAll() {
 
 $$('.nav').forEach((tab) => tab.addEventListener('click', () => setTab(tab.dataset.tab)));
 $('#menuToggle').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
-$('#roleSelect').addEventListener('change', (event) => {
+$('#activeRoleSelect').addEventListener('change', (event) => {
   state.role = event.target.value;
   localStorage.setItem('role', state.role);
   applyRole();
@@ -580,8 +717,16 @@ $('#exportPdf').addEventListener('click', () => exportCurrent('pdf'));
 $('#refreshAll').addEventListener('click', refreshAll);
 $('#stopScanner').addEventListener('click', stopScanner);
 $('#saveDialogItem').addEventListener('click', saveDialogItem);
+$('#saveRolesConfig').addEventListener('click', () => saveRolesConfig().then(() => alert('角色权限已保存')).catch((error) => alert(`角色配置格式错误：${error.message}`)));
+$('#saveTableConfig').addEventListener('click', () => saveTableConfig().then(() => alert('表格配置已保存')).catch((error) => alert(`表格配置格式错误：${error.message}`)));
+$('#resetConfig').addEventListener('click', resetConfig);
 
-state.items = [emptyItem()];
-applyRole();
-renderSheet();
-refreshAll().catch((error) => alert(`加载失败：${error.message}`));
+async function init() {
+  await loadSettings();
+  state.items = [emptyItem()];
+  applyRole();
+  renderSheet();
+  await refreshAll();
+}
+
+init().catch((error) => alert(`加载失败：${error.message}`));

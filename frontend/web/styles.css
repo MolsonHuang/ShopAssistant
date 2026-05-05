@@ -83,6 +83,9 @@ label {
 .topbar {
   margin-bottom: 14px;
 }
+.top-role {
+  min-width: 180px;
+}
 #pageTitle {
   display: block;
   font-size: 20px;
@@ -181,7 +184,8 @@ h2 {
   border: 1px solid #cfd8e3;
 }
 .order-sheet {
-  width: 1280px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   background: #fff;
@@ -338,6 +342,17 @@ dialog {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.config-editor {
+  min-height: 360px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+}
 .scanner-modal {
   position: fixed;
   inset: 0;
@@ -397,6 +412,7 @@ dialog {
   }
   .form-grid,
   .mark-grid,
+  .config-grid,
   .dialog-grid {
     grid-template-columns: 1fr;
   }

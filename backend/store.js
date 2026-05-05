@@ -338,6 +338,25 @@ function inventoryRows() {
   ).all();
 }
 
+function getSetting(key, fallback = null) {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.value);
+  } catch (error) {
+    return row.value;
+  }
+}
+
+function saveSetting(key, value) {
+  db.prepare(
+    `INSERT INTO app_settings (key, value, updatedAt)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP`
+  ).run(key, JSON.stringify(value));
+  return getSetting(key);
+}
+
 module.exports = {
   listProducts,
   getProduct,
@@ -352,5 +371,7 @@ module.exports = {
   updateOrderStatus,
   getOrderHistory,
   salesRows,
-  inventoryRows
+  inventoryRows,
+  getSetting,
+  saveSetting
 };

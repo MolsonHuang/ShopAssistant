@@ -24,6 +24,9 @@
             <strong id="pageTitle">订单表格</strong>
             <span id="roleHint">当前角色：老板，可见全部页面</span>
           </div>
+          <label class="top-role">角色
+            <select id="activeRoleSelect"></select>
+          </label>
           <button id="refreshAll" class="ghost">刷新</button>
         </header>
 
@@ -82,36 +85,10 @@
 
             <div class="sheet-wrap">
               <table id="orderSheet" class="order-sheet">
-                <thead>
-                  <tr>
-                    <th>操作</th>
-                    <th>客人货号<br><small>ITEM NO</small></th>
-                    <th>图片<br><small>Picture</small></th>
-                    <th>工厂货号<br><small>Factory Item No.</small></th>
-                    <th>描述<br><small>Description</small></th>
-                    <th>单位<br><small>Unit</small></th>
-                    <th>件数<br><small>CTN</small></th>
-                    <th>装箱数<br><small>QTY/CTN</small></th>
-                    <th>单价<br><small>Unit Price</small></th>
-                    <th>总金额<br><small>Total Amount</small></th>
-                    <th>单件体积<br><small>CBM/CTN</small></th>
-                    <th>总体积<br><small>Total CBM</small></th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
+                <colgroup id="sheetCols"></colgroup>
+                <thead id="sheetHead"></thead>
                 <tbody id="sheetBody"></tbody>
-                <tfoot>
-                  <tr>
-                    <td colspan="6">合计</td>
-                    <td id="sumCartons">0</td>
-                    <td id="sumPieces">0</td>
-                    <td></td>
-                    <td id="sumAmount">0.00</td>
-                    <td></td>
-                    <td id="sumCbm">0.000</td>
-                    <td id="sumStatus"></td>
-                  </tr>
-                </tfoot>
+                <tfoot id="sheetFoot"></tfoot>
               </table>
             </div>
             <div id="mobileItems" class="mobile-items"></div>
@@ -148,15 +125,18 @@
         <section id="settings" class="view">
           <section class="panel full">
             <h2>权限设置</h2>
-            <div class="role-grid">
-              <label>选择角色
-                <select id="roleSelect">
-                  <option value="boss">老板：全部页面</option>
-                  <option value="sales">业务/跟单：订单、仓库、送货</option>
-                  <option value="warehouse">仓管：送货仓库、库存</option>
-                  <option value="accounting">会计：会计统计、订单列表</option>
-                </select>
+            <div class="config-grid">
+              <label>角色权限配置 JSON
+                <textarea id="rolesConfig" class="config-editor"></textarea>
               </label>
+              <label>订单表格配置 JSON
+                <textarea id="tableConfig" class="config-editor"></textarea>
+              </label>
+            </div>
+            <div class="actions">
+              <button id="saveRolesConfig" type="button" class="primary">保存角色权限</button>
+              <button id="saveTableConfig" type="button" class="primary">保存表格配置</button>
+              <button id="resetConfig" type="button" class="ghost">恢复默认配置</button>
             </div>
             <p class="muted">微信扫码登录需要微信开放平台/公众号或企业微信配置回调域名。当前先预留角色权限框架，接入微信登录后可按账号绑定角色。</p>
           </section>

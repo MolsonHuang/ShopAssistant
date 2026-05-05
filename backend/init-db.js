@@ -93,6 +93,11 @@ const statements = [
     payload TEXT,
     createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(productId) REFERENCES products(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
   )`
 ];
 

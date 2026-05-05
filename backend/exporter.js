@@ -44,6 +44,11 @@ function fillHeader(sheet, order) {
 }
 
 function fillItems(sheet, workbook, order) {
+  const tableConfig = store.getSetting('orderTableConfig', null);
+  if (tableConfig && Array.isArray(tableConfig.columns)) {
+    fillItemsFromConfig(sheet, workbook, order, tableConfig);
+    return;
+  }
   const startRow = 8;
   const maxTemplateRows = 18;
   order.items.forEach((item, index) => {
@@ -88,6 +93,83 @@ function fillItems(sheet, workbook, order) {
     tl: { col: 8.2, row: totalRow + 1.1 },
     ext: { width: 130, height: 80 }
   });
+}
+
+function fillItemsFromConfig(sheet, workbook, order, tableConfig) {
+  const startRow = 8;
+  const headerRow = 6;
+  const subHeaderRow = 7;
+  const columns = tableConfig.columns.filter((column) => !['actions', 'status'].includes(column.type));
+  for (let rowNo = startRow; rowNo <= 30; rowNo += 1) {
+    for (let columnNo = 1; columnNo <= 20; columnNo += 1) {
+      sheet.getRow(rowNo).getCell(columnNo).value = null;
+    }
+  }
+  columns.forEach((column, index) => {
+    const cellNo = index + 1;
+    sheet.getColumn(cellNo).width = Math.max(8, Number(column.width || 100) / 9);
+    sheet.getRow(headerRow).getCell(cellNo).value = column.label || column.key;
+    sheet.getRow(subHeaderRow).getCell(cellNo).value = column.subLabel || '';
+  });
+
+  order.items.forEach((item, rowIndex) => {
+    const rowNo = startRow + rowIndex;
+    const row = sheet.getRow(rowNo);
+    row.height = Number(tableConfig.rowHeight || 64);
+    columns.forEach((column, columnIndex) => {
+      const cell = row.getCell(columnIndex + 1);
+      if (column.type === 'image') {
+        addImage(workbook, sheet, item.exportImagePath || item.productImagePath, {
+          tl: { col: columnIndex + 0.05, row: rowNo - 0.9 },
+          ext: { width: Math.min(Number(column.width || 100) - 12, 90), height: Math.max(Number(tableConfig.rowHeight || 64) - 12, 42) }
+        });
+        return;
+      }
+      if (column.type === 'formula' && column.formula) {
+        cell.value = {
+          formula: formulaToExcel(column.formula, columns, rowNo),
+          result: Number(item[column.key] || 0)
+        };
+        return;
+      }
+      cell.value = item[column.key] ?? '';
+    });
+  });
+
+  const totalRow = startRow + Math.max(order.items.length, 1);
+  sheet.getRow(totalRow).getCell(1).value = '合计';
+  const firstItemRow = startRow;
+  const lastItemRow = startRow + Math.max(order.items.length, 1) - 1;
+  columns.forEach((column, index) => {
+    if (column.total === 'sum') {
+      const letter = sheet.getColumn(index + 1).letter;
+      sheet.getRow(totalRow).getCell(index + 1).value = {
+        formula: `SUM(${letter}${firstItemRow}:${letter}${lastItemRow})`,
+        result: order.items.reduce((sum, item) => sum + Number(item[column.key] || 0), 0)
+      };
+    }
+    if (column.totalKey) {
+      sheet.getRow(totalRow).getCell(index + 1).value = order.items.reduce((sum, item) => sum + Number(item[column.totalKey] || 0), 0);
+    }
+  });
+}
+
+function formulaToExcel(formula, columns, rowNo) {
+  return formula.replace(/[A-Za-z_]\w*/g, (key) => {
+    const index = columns.findIndex((column) => column.key === key);
+    if (index === -1) return '0';
+    return `${columnNumberToName(index + 1)}${rowNo}`;
+  });
+}
+
+function columnNumberToName(number) {
+  let name = '';
+  while (number > 0) {
+    const remainder = (number - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    number = Math.floor((number - 1) / 26);
+  }
+  return name;
 }
 
 function addImage(workbook, sheet, publicPath, range) {
