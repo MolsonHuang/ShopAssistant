@@ -81,10 +81,11 @@ function calcItem(item) {
   const dimCbm = Number(item.lengthCm || 0) && Number(item.widthCm || 0) && Number(item.heightCm || 0)
     ? (Number(item.lengthCm) * Number(item.widthCm) * Number(item.heightCm)) / 1000000
     : 0;
-  const cbmPerCarton = Number(item.cbmPerCarton || 0) || dimCbm;
+  const rawCbm = String(item.cbmPerCarton ?? '');
+  const cbmPerCarton = Number(rawCbm || 0) || dimCbm;
   return {
     ...item,
-    cbmPerCarton: round(cbmPerCarton, 3),
+    cbmPerCarton: rawCbm.endsWith('.') ? item.cbmPerCarton : round(cbmPerCarton, 3),
     totalPieces: Math.round(cartons * cartonQty),
     totalCbm: round(cartons * cbmPerCarton, 3),
     totalAmount: round(cartons * cartonQty * unitPrice, 2)
@@ -174,12 +175,12 @@ function rowHtml(item, index) {
       ${inputCell('cartons', item.cartons, 'number')}
       ${inputCell('cartonQty', item.cartonQty, 'number')}
       ${inputCell('unitPrice', item.unitPrice, 'number', '0.01')}
-      <td>${money(item.totalAmount)}</td>
+      <td data-total="amount">${money(item.totalAmount)}</td>
       <td>
         <input data-field="cbmPerCarton" type="number" step="0.001" value="${item.cbmPerCarton || 0}">
         <button type="button" data-action="volume" class="ghost">体积</button>
       </td>
-      <td>${Number(item.totalCbm || 0).toFixed(3)}</td>
+      <td data-total="cbm">${Number(item.totalCbm || 0).toFixed(3)}</td>
       <td>${statusPills(item)}</td>
     </tr>
   `;
@@ -222,13 +223,25 @@ function bindSheetEvents() {
         input.addEventListener('input', () => {
           state.items[index][input.dataset.field] = input.value;
           state.items[index] = calcItem(state.items[index]);
-          renderSheet();
+          updateRowComputed(row, index);
+          updateTotals();
+        });
+        input.addEventListener('change', () => {
+          state.items[index] = calcItem(state.items[index]);
+          updateRowComputed(row, index);
+          updateTotals();
         });
       }
     });
     $$('[data-action]', row).forEach((button) => button.addEventListener('click', () => handleRowAction(index, button.dataset.action)));
   });
   $$('[data-mobile-edit]').forEach((button) => button.addEventListener('click', () => openItemDialog(Number(button.dataset.mobileEdit))));
+}
+
+function updateRowComputed(row, index) {
+  const item = calcItem(state.items[index]);
+  row.querySelector('[data-total="amount"]').textContent = money(item.totalAmount);
+  row.querySelector('[data-total="cbm"]').textContent = Number(item.totalCbm || 0).toFixed(3);
 }
 
 async function uploadItemPhoto(index, files) {
@@ -357,7 +370,7 @@ async function saveOrder(event) {
   if (front[0]) form.elements.frontMarkImagePath.value = front[0].path;
   if (side[0]) form.elements.sideMarkImagePath.value = side[0].path;
   if (barcode[0]) form.elements.barcodeFilePath.value = barcode[0].path;
-  const payload = { ...formData(form), items: state.items.map(calcItem) };
+  const payload = { ...formData(form), items: state.items.map((item) => ({ ...calcItem(item), cbmPerCarton: Number(item.cbmPerCarton || 0) })) };
   const id = payload.id;
   delete payload.id;
   const saved = await request(id ? `/orders/${id}` : '/orders', { method: id ? 'PUT' : 'POST', body: payload });

@@ -7,6 +7,11 @@ const { toAbsolutePath } = require('./upload');
 
 const templatePath = path.resolve(__dirname, 'templates/contract-template.xlsx');
 const exportRoot = path.resolve(__dirname, 'exports');
+const chineseFontPath = [
+  'C:/Windows/Fonts/simhei.ttf',
+  'C:/Windows/Fonts/simsun.ttc',
+  'C:/Windows/Fonts/msyh.ttc'
+].find((fontPath) => fs.existsSync(fontPath));
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -32,6 +37,10 @@ function fillHeader(sheet, order) {
   setCell(sheet, 'B5', order.companyAddress);
   setCell(sheet, 'E5', order.deliveryAddress);
   setCell(sheet, 'K5', order.deliveryTime);
+  if (order.notes) {
+    const notesCell = sheet.getCell('A27');
+    notesCell.value = `${notesCell.value || '正唛2面如图：'}\n备注：${order.notes}`;
+  }
 }
 
 function fillItems(sheet, workbook, order) {
@@ -51,9 +60,9 @@ function fillItems(sheet, workbook, order) {
     row.getCell(6).value = item.cartons;
     row.getCell(7).value = item.cartonQty;
     row.getCell(8).value = item.unitPrice;
-    row.getCell(9).value = item.totalAmount;
+    row.getCell(9).value = { formula: `F${rowNo}*G${rowNo}*H${rowNo}`, result: Number(item.totalAmount || 0) };
     row.getCell(10).value = item.cbmPerCarton;
-    row.getCell(11).value = item.totalCbm;
+    row.getCell(11).value = { formula: `J${rowNo}*F${rowNo}`, result: Number(item.totalCbm || 0) };
     addImage(workbook, sheet, item.exportImagePath || item.productImagePath, {
       tl: { col: 1.05, row: rowNo - 0.9 },
       ext: { width: 70, height: 58 }
@@ -61,9 +70,11 @@ function fillItems(sheet, workbook, order) {
   });
 
   const totalRow = 26 + Math.max(0, order.items.length - maxTemplateRows);
-  sheet.getCell(`F${totalRow}`).value = order.items.reduce((sum, item) => sum + Number(item.cartons || 0), 0);
-  sheet.getCell(`I${totalRow}`).value = order.items.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
-  sheet.getCell(`K${totalRow}`).value = order.items.reduce((sum, item) => sum + Number(item.totalCbm || 0), 0);
+  const firstItemRow = startRow;
+  const lastItemRow = startRow + Math.max(order.items.length, 1) - 1;
+  sheet.getCell(`F${totalRow}`).value = { formula: `SUM(F${firstItemRow}:F${lastItemRow})`, result: order.items.reduce((sum, item) => sum + Number(item.cartons || 0), 0) };
+  sheet.getCell(`I${totalRow}`).value = { formula: `SUM(I${firstItemRow}:I${lastItemRow})`, result: order.items.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0) };
+  sheet.getCell(`K${totalRow}`).value = { formula: `SUM(K${firstItemRow}:K${lastItemRow})`, result: order.items.reduce((sum, item) => sum + Number(item.totalCbm || 0), 0) };
 
   addImage(workbook, sheet, order.frontMarkImagePath, {
     tl: { col: 0.2, row: totalRow + 1.1 },
@@ -117,6 +128,10 @@ async function exportPdf(orderId) {
     stream.on('finish', resolve);
     stream.on('error', reject);
     doc.pipe(stream);
+    if (chineseFontPath) {
+      doc.registerFont('cn', chineseFontPath);
+      doc.font('cn');
+    }
 
     doc.fontSize(16).text('义乌市展邦圣诞工艺品合同', { align: 'center' });
     doc.fontSize(8).text('Yiwu Zhanbang Christmas Ornaments Sales Confirmation', { align: 'center' });
@@ -127,6 +142,7 @@ async function exportPdf(orderId) {
     doc.text(`公司地址：${order.companyAddress || ''}`);
     doc.text(`送货地址：${order.deliveryAddress || ''}`);
     doc.text(`下单时间：${order.orderTime || ''}    送货时间：${order.deliveryTime || ''}`);
+    if (order.notes) doc.text(`备注：${order.notes}`);
     doc.moveDown(0.6);
 
     const columns = [24, 75, 130, 195, 285, 325, 365, 405, 455, 515];

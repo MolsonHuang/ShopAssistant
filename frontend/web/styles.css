@@ -141,6 +141,9 @@ h2 {
   gap: 8px;
   margin-bottom: 10px;
 }
+.wide-field {
+  grid-column: span 2;
+}
 .mark-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -189,6 +192,11 @@ h2 {
   padding: 4px;
   text-align: center;
   vertical-align: middle;
+}
+.order-sheet td[data-total],
+.order-sheet td[data-computed] {
+  background: #fbfcfd;
+  font-weight: 700;
 }
 .order-sheet th {
   background: #f6f8fa;
