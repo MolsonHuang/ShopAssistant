@@ -47,6 +47,10 @@ router.get('/orders/:id/export/pdf', async (req, res) => {
 router.get('/dashboard/sales', dashboardController.sales);
 router.get('/dashboard/inventory', dashboardController.inventory);
 
+router.get('/search', (req, res) => {
+  res.json(store.search(req.query.q || ''));
+});
+
 router.get('/settings/:key', (req, res) => {
   res.json({ key: req.params.key, value: store.getSetting(req.params.key, null) });
 });

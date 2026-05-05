@@ -338,6 +338,25 @@ function inventoryRows() {
   ).all();
 }
 
+function search(keyword) {
+  const term = `%${String(keyword || '').trim()}%`;
+  if (term === '%%') return { orders: [], products: [] };
+  const orders = db.prepare(
+    `SELECT * FROM orders
+     WHERE deletedAt IS NULL AND (
+       orderNo LIKE ? OR customerName LIKE ? OR customerPhone LIKE ? OR contactName LIKE ?
+       OR paymentMethod LIKE ? OR companyAddress LIKE ? OR deliveryAddress LIKE ? OR notes LIKE ?
+     )
+     ORDER BY updatedAt DESC LIMIT 50`
+  ).all(term, term, term, term, term, term, term, term).map(getPayload);
+  const products = db.prepare(
+    `SELECT * FROM products
+     WHERE barcode LIKE ? OR factoryItemNo LIKE ? OR description LIKE ? OR innerPack LIKE ? OR location LIKE ?
+     ORDER BY updatedAt DESC LIMIT 50`
+  ).all(term, term, term, term, term);
+  return { orders, products };
+}
+
 function getSetting(key, fallback = null) {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
   if (!row) return fallback;
@@ -372,6 +391,7 @@ module.exports = {
   getOrderHistory,
   salesRows,
   inventoryRows,
+  search,
   getSetting,
   saveSetting
 };

@@ -183,6 +183,11 @@ h2 {
   overflow: auto;
   border: 1px solid #cfd8e3;
 }
+.sheet-wrap.drag-over {
+  outline: 2px dashed #1769aa;
+  outline-offset: 4px;
+  background: #eef7ff;
+}
 .order-sheet {
   width: max-content;
   min-width: 100%;
@@ -226,14 +231,18 @@ h2 {
   background: #fff8df;
   font-weight: 700;
 }
-.row-actions {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 3px;
+.drag-cell {
+  background: linear-gradient(145deg, #f8fafc, #dbe3ec);
 }
-.row-actions button {
-  min-height: 26px;
-  padding: 0;
+.drag-handle {
+  width: 24px;
+  min-height: 42px;
+  border: 1px solid #aebdcc;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ffffff, #cfd8e3);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aebdcc;
+  color: #52616f;
+  cursor: grab;
 }
 .pic-cell img,
 .thumb {
@@ -300,6 +309,12 @@ h2 {
 .delivery-grid {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
+.delivery-grid.calendar-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+.calendar-day {
+  min-height: 140px;
+}
 .summary-grid {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   margin-bottom: 12px;
@@ -351,6 +366,50 @@ dialog {
 .config-editor {
   min-height: 360px;
   font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+}
+.list-tools {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.list-tools input,
+.list-tools select {
+  max-width: 360px;
+}
+.row-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  min-width: 140px;
+  padding: 6px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(23, 32, 42, .16);
+}
+.row-menu[hidden] {
+  display: none;
+}
+.row-menu button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.photo-assign-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.cell-with-suffix {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+}
+.cell-with-suffix span {
+  color: #637381;
   font-size: 12px;
 }
 .scanner-modal {

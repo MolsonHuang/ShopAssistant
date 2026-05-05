@@ -2,8 +2,12 @@ const api = `${location.origin}/api`;
 const state = {
   products: [],
   orders: [],
+  inventory: [],
+  deliveryOrders: [],
   items: [],
   editingIndex: null,
+  contextIndex: null,
+  pendingPhotos: [],
   role: localStorage.getItem('role') || 'boss',
   roleConfig: null,
   tableConfig: null
@@ -18,35 +22,38 @@ const fields = [
 ];
 
 const pageLabels = {
-  orders: '订单表格',
+  orderEntry: '下订单',
+  orderListView: '订单列表',
   products: '商品库',
+  inventory: '库存管理',
   delivery: '送货仓库',
   accounting: '会计统计',
+  search: '搜索',
   settings: '权限设置'
 };
 
 const defaultRoleConfig = {
-  boss: { name: '老板', pages: ['orders', 'products', 'delivery', 'accounting', 'settings'] },
-  sales: { name: '业务/跟单', pages: ['orders', 'delivery', 'products'] },
+  boss: { name: '老板', pages: ['orderEntry', 'orderListView', 'products', 'inventory', 'delivery', 'accounting', 'search', 'settings'] },
+  sales: { name: '业务/跟单', pages: ['orderEntry', 'orderListView', 'products', 'inventory', 'delivery', 'search'] },
   warehouse: { name: '仓管', pages: ['delivery', 'products'] },
-  accounting: { name: '会计', pages: ['accounting', 'orders'] }
+  accounting: { name: '会计', pages: ['accounting', 'orderListView', 'search'] }
 };
 
 const defaultTableConfig = {
   rowHeight: 64,
   columns: [
-    { key: '_actions', label: '操作', width: 96, type: 'actions', locked: true },
+    { key: '_actions', label: '', width: 34, type: 'actions', locked: true },
     { key: 'customerItemNo', label: '客人货号', subLabel: 'ITEM NO', width: 110, type: 'text' },
     { key: 'productImagePath', label: '图片', subLabel: 'Picture', width: 110, type: 'image' },
     { key: 'factoryItemNo', label: '工厂货号', subLabel: 'Factory Item No.', width: 120, type: 'text' },
     { key: 'productDescription', label: '描述', subLabel: 'Description', width: 220, type: 'textarea' },
-    { key: 'innerPack', label: '单位', subLabel: 'Unit', width: 80, type: 'text' },
+    { key: 'innerPack', label: '单位', subLabel: 'Unit', width: 80, type: 'text', suffix: '' },
     { key: 'cartons', label: '件数', subLabel: 'CTN', width: 80, type: 'number', total: 'sum' },
     { key: 'cartonQty', label: '装箱数', subLabel: 'QTY/CTN', width: 90, type: 'number', totalKey: 'totalPieces' },
-    { key: 'unitPrice', label: '单价', subLabel: 'Unit Price', width: 90, type: 'number', step: '0.01' },
-    { key: 'totalAmount', label: '总金额', subLabel: 'Total Amount', width: 100, type: 'formula', formula: 'cartonQty*cartons*unitPrice', total: 'sum', decimals: 2 },
-    { key: 'cbmPerCarton', label: '单件体积', subLabel: 'CBM/CTN', width: 110, type: 'volume' },
-    { key: 'totalCbm', label: '总体积', subLabel: 'Total CBM', width: 100, type: 'formula', formula: 'cbmPerCarton*cartons', total: 'sum', decimals: 3 },
+    { key: 'unitPrice', label: '单价', subLabel: 'Unit Price', width: 90, type: 'number', step: '0.01', suffix: '$' },
+    { key: 'totalAmount', label: '总金额', subLabel: 'Total Amount', width: 100, type: 'formula', formula: 'cartonQty*cartons*unitPrice', total: 'sum', decimals: 2, suffix: '$' },
+    { key: 'cbmPerCarton', label: '单件体积', subLabel: 'CBM/CTN', width: 110, type: 'volume', suffix: 'm³' },
+    { key: 'totalCbm', label: '总体积', subLabel: 'Total CBM', width: 100, type: 'formula', formula: 'cbmPerCarton*cartons', total: 'sum', decimals: 3, suffix: 'm³' },
     { key: '_status', label: '状态', width: 120, type: 'status' }
   ]
 };
@@ -78,8 +85,18 @@ async function loadSettings() {
     request('/settings/roleConfig').catch(() => ({ value: null }))
   ]);
   state.tableConfig = tableSetting.value || structuredClone(defaultTableConfig);
-  state.roleConfig = roleSetting.value || structuredClone(defaultRoleConfig);
+  state.roleConfig = normalizeRoleConfig(roleSetting.value || structuredClone(defaultRoleConfig));
   syncConfigEditors();
+}
+
+function normalizeRoleConfig(config) {
+  const normalized = {};
+  Object.entries(config || defaultRoleConfig).forEach(([key, role]) => {
+    const pages = (role.pages || []).flatMap((page) => (page === 'orders' ? ['orderEntry', 'orderListView'] : [page]));
+    normalized[key] = { ...role, pages: [...new Set(pages)] };
+  });
+  if (!normalized.boss) normalized.boss = structuredClone(defaultRoleConfig.boss);
+  return normalized;
 }
 
 async function saveSetting(key, value) {
@@ -94,7 +111,7 @@ function syncConfigEditors() {
 
 async function saveRolesConfig() {
   const parsed = JSON.parse($('#rolesConfig').value);
-  state.roleConfig = await saveSetting('roleConfig', parsed);
+  state.roleConfig = await saveSetting('roleConfig', normalizeRoleConfig(parsed));
   if (!state.roleConfig[state.role]) state.role = Object.keys(state.roleConfig)[0] || 'boss';
   localStorage.setItem('role', state.role);
   applyRole();
@@ -278,12 +295,16 @@ function renderSheetStructure() {
 }
 
 function getColumns() {
-  return (state.tableConfig || defaultTableConfig).columns || defaultTableConfig.columns;
+  const columns = (state.tableConfig || defaultTableConfig).columns || defaultTableConfig.columns;
+  if ($('.view.active')?.id === 'orderEntry') {
+    return columns.filter((column) => column.type !== 'status' && column.key !== '_status');
+  }
+  return columns;
 }
 
 function rowHtml(item, index) {
   return `
-    <tr data-index="${index}" class="${item.inspectionStatus === 'failed' || item.supplyStatus === 'unavailable' ? 'row-warn' : ''}">
+    <tr data-index="${index}" draggable="true" class="${item.inspectionStatus === 'failed' || item.supplyStatus === 'unavailable' ? 'row-warn' : ''}">
       ${getColumns().map((column) => cellHtml(column, item)).join('')}
     </tr>
   `;
@@ -291,14 +312,7 @@ function rowHtml(item, index) {
 
 function cellHtml(column, item) {
   if (column.type === 'actions') {
-    return `<td><div class="row-actions">
-      <button type="button" data-action="up">↑</button>
-      <button type="button" data-action="down">↓</button>
-      <button type="button" data-action="copy">复</button>
-      <button type="button" data-action="delete">删</button>
-      <button type="button" data-action="scan">扫</button>
-      <button type="button" data-action="lookup">查</button>
-    </div></td>`;
+    return '<td class="drag-cell"><button type="button" class="drag-handle" data-action="lookup" title="查商品/拖动">⇅</button></td>';
   }
   if (column.type === 'image') {
     return `<td class="pic-cell">${imageHtml(item[column.key])}<input type="file" accept="image/*" data-field="photoFile"></td>`;
@@ -308,19 +322,24 @@ function cellHtml(column, item) {
   }
   if (column.type === 'formula') {
     const decimals = Number(column.decimals ?? 2);
-    return `<td data-computed="${column.key}">${Number(item[column.key] || 0).toFixed(decimals)}</td>`;
+    return `<td data-computed="${column.key}">${formatValue(Number(item[column.key] || 0).toFixed(decimals), column)}</td>`;
   }
   if (column.type === 'volume') {
-    return `<td><input data-field="${column.key}" type="number" step="${column.step || '0.001'}" value="${escapeHtml(item[column.key] ?? 0)}"><button type="button" data-action="volume" class="ghost">体积</button></td>`;
+    return `<td><div class="cell-with-suffix"><input data-field="${column.key}" type="number" step="${column.step || '0.001'}" value="${escapeHtml(item[column.key] ?? 0)}">${column.suffix ? `<span>${escapeHtml(column.suffix)}</span>` : ''}</div><button type="button" data-action="volume" class="ghost">体积</button></td>`;
   }
   if (column.type === 'status') {
     return `<td>${statusPills(item)}</td>`;
   }
-  return inputCell(column.key, item[column.key], column.type === 'number' ? 'number' : 'text', column.step || '');
+  return inputCell(column.key, item[column.key], column.type === 'number' ? 'number' : 'text', column.step || '', column);
 }
 
-function inputCell(field, value, type = 'text', step = '') {
-  return `<td><input data-field="${field}" type="${type}" ${step ? `step="${step}"` : ''} value="${escapeHtml(value ?? '')}"></td>`;
+function inputCell(field, value, type = 'text', step = '', column = {}) {
+  const input = `<input data-field="${field}" type="${type}" ${step ? `step="${step}"` : ''} value="${escapeHtml(value ?? '')}">`;
+  return `<td>${column.suffix ? `<div class="cell-with-suffix">${input}<span>${escapeHtml(column.suffix)}</span></div>` : input}</td>`;
+}
+
+function formatValue(value, column = {}) {
+  return `${value}${column.suffix ? ` ${column.suffix}` : ''}`;
 }
 
 function statusPills(item) {
@@ -349,6 +368,14 @@ function mobileItemHtml(item, index) {
 function bindSheetEvents() {
   $$('#sheetBody tr').forEach((row) => {
     const index = Number(row.dataset.index);
+    row.addEventListener('contextmenu', (event) => showRowMenu(event, index));
+    row.addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain', String(index)));
+    row.addEventListener('dragover', (event) => event.preventDefault());
+    row.addEventListener('drop', (event) => {
+      event.preventDefault();
+      const from = Number(event.dataTransfer.getData('text/plain'));
+      moveRow(from, index);
+    });
     $$('[data-field]', row).forEach((input) => {
       if (input.type === 'file') {
         input.addEventListener('change', (event) => uploadItemPhoto(index, event.target.files));
@@ -371,6 +398,22 @@ function bindSheetEvents() {
   $$('[data-mobile-edit]').forEach((button) => button.addEventListener('click', () => openItemDialog(Number(button.dataset.mobileEdit))));
 }
 
+function showRowMenu(event, index) {
+  event.preventDefault();
+  state.contextIndex = index;
+  const menu = $('#rowMenu');
+  menu.style.left = `${event.clientX}px`;
+  menu.style.top = `${event.clientY}px`;
+  menu.hidden = false;
+}
+
+function moveRow(from, to) {
+  if (Number.isNaN(from) || from === to) return;
+  const [item] = state.items.splice(from, 1);
+  state.items.splice(to, 0, item);
+  renderSheet();
+}
+
 function updateRowComputed(row, index) {
   const item = calcItem(state.items[index]);
   getColumns().forEach((column) => {
@@ -390,6 +433,69 @@ async function uploadItemPhoto(index, files) {
   renderSheet();
 }
 
+async function handleBatchPhotos(files) {
+  const uploaded = await uploadFiles('products', files);
+  if (!uploaded.length) return;
+  if (!hasMeaningfulItems()) {
+    state.items = uploaded.map((file) => emptyItem({ productImagePath: file.path, exportImagePath: file.path }));
+    renderSheet();
+    return;
+  }
+  state.pendingPhotos = uploaded;
+  $('#photoAssignList').innerHTML = uploaded.map((file, photoIndex) => `
+    <article class="card photo-assign-row">
+      ${imageHtml(file.path)}
+      <label>插入到行
+        <select data-photo-index="${photoIndex}">
+          <option value="new">新增一行</option>
+          ${state.items.map((item, index) => `<option value="${index}">${index + 1}. ${escapeHtml(item.customerItemNo || item.factoryItemNo || '未命名产品')}</option>`).join('')}
+        </select>
+      </label>
+    </article>
+  `).join('');
+  $('#photoAssignDialog').showModal();
+}
+
+function applyPhotoAssign() {
+  $$('[data-photo-index]').forEach((select) => {
+    const file = state.pendingPhotos[Number(select.dataset.photoIndex)];
+    if (!file) return;
+    if (select.value === 'new') {
+      state.items.push(emptyItem({ productImagePath: file.path, exportImagePath: file.path }));
+      return;
+    }
+    const index = Number(select.value);
+    state.items[index].productImagePath = file.path;
+    state.items[index].exportImagePath = file.path;
+  });
+  state.pendingPhotos = [];
+  $('#photoAssignDialog').close();
+  renderSheet();
+}
+
+function hasMeaningfulItems() {
+  return state.items.some((item) => fields.some((field) => {
+    if (['deliveryStatus', 'inspectionStatus', 'supplyStatus', 'warehouseStatus'].includes(field)) return false;
+    const value = item[field];
+    return value !== undefined && value !== null && value !== '' && value !== 0;
+  }));
+}
+
+function batchFillItemNos() {
+  const pattern = prompt('输入规律：前缀,起始数字,数量,位数。例如：A,1,100,3 会生成 A001-A100');
+  if (!pattern) return;
+  const [prefix = '', start = '1', count = '1', pad = '0'] = pattern.split(',').map((part) => part.trim());
+  const startNo = Number(start);
+  const total = Number(count);
+  const padSize = Number(pad);
+  if (!Number.isFinite(startNo) || !Number.isFinite(total)) return alert('格式不正确');
+  while (state.items.length < total) state.items.push(emptyItem());
+  for (let index = 0; index < total; index += 1) {
+    state.items[index].customerItemNo = `${prefix}${String(startNo + index).padStart(padSize, '0')}`;
+  }
+  renderSheet();
+}
+
 async function handleRowAction(index, action) {
   if (action === 'up' && index > 0) {
     [state.items[index - 1], state.items[index]] = [state.items[index], state.items[index - 1]];
@@ -402,6 +508,17 @@ async function handleRowAction(index, action) {
   if (action === 'lookup') await lookupProduct(index);
   if (action === 'scan') await scanBarcode(index);
   if (action === 'volume') volumeCalculator(index);
+  renderSheet();
+}
+
+function handleContextAction(action) {
+  const index = state.contextIndex;
+  if (index === null || index === undefined) return;
+  if (action === 'insertAbove') state.items.splice(index, 0, emptyItem());
+  if (action === 'insertBelow') state.items.splice(index + 1, 0, emptyItem());
+  if (action === 'copy') state.items.splice(index + 1, 0, { ...state.items[index] });
+  if (action === 'delete' && state.items.length > 1) state.items.splice(index, 1);
+  $('#rowMenu').hidden = true;
   renderSheet();
 }
 
@@ -458,6 +575,10 @@ async function saveItemToProduct(item) {
 let scannerControls = null;
 async function scanBarcode(index) {
   if (!window.ZXingBrowser) return alert('扫码库未加载，请手动输入条码');
+  if (!window.isSecureContext) {
+    alert('浏览器相机权限通常要求 HTTPS 或 localhost。手机用局域网 http 打开时无法调用相机，请改用 HTTPS 部署、localhost 调试，或手动输入/上传条码图片。');
+    return;
+  }
   $('#scannerModal').hidden = false;
   const reader = new ZXingBrowser.BrowserMultiFormatReader();
   try {
@@ -494,7 +615,7 @@ function updateTotals() {
     const key = cell.dataset.sum;
     const column = getColumns().find((item) => item.key === key || item.totalKey === key);
     const decimals = Number(column?.decimals ?? (key.toLowerCase().includes('amount') ? 2 : key.toLowerCase().includes('cbm') ? 3 : 0));
-    cell.textContent = Number(totals[key] || 0).toFixed(decimals);
+    cell.textContent = formatValue(Number(totals[key] || 0).toFixed(decimals), column);
   });
 }
 
@@ -518,10 +639,16 @@ async function saveOrder(event) {
 
 async function loadOrders() {
   state.orders = await request('/orders');
-  $('#orderList').innerHTML = state.orders.map(orderCard).join('') || '<p class="meta">暂无订单</p>';
+  renderOrderList();
+  renderAccounting();
+}
+
+function renderOrderList() {
+  const keyword = ($('#orderSearchInput')?.value || '').toLowerCase();
+  const rows = state.orders.filter((order) => JSON.stringify(order).toLowerCase().includes(keyword));
+  $('#orderList').innerHTML = rows.map(orderCard).join('') || '<p class="meta">暂无订单</p>';
   $$('.edit-order').forEach((button) => button.addEventListener('click', () => editOrder(button.dataset.id)));
   $$('.delete-order').forEach((button) => button.addEventListener('click', () => deleteOrder(button.dataset.id)));
-  renderAccounting();
 }
 
 function orderCard(order) {
@@ -552,7 +679,7 @@ async function editOrder(id) {
   setForm($('#orderForm'), order);
   state.items = (order.items.length ? order.items : [{}]).map(emptyItem);
   renderSheet();
-  setTab('orders');
+  setTab('orderEntry');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -565,20 +692,58 @@ async function deleteOrder(id) {
 async function loadProducts() {
   state.products = await request('/products');
   $('#productList').innerHTML = state.products.map((item) => `
+    <tr data-product-id="${item.id}">
+      <td>${imageHtml(item.productImagePath)}</td>
+      <td>${escapeHtml(item.barcode || '')}</td>
+      <td>${escapeHtml(item.factoryItemNo || '')}</td>
+      <td>${escapeHtml(item.description || '')}</td>
+      <td>${escapeHtml(item.innerPack || '')}</td>
+      <td>${item.cartonQty || 0}</td>
+      <td>${item.cbmPerCarton || 0}</td>
+      <td>${item.stock || 0}</td>
+      <td>${escapeHtml(item.location || '')}</td>
+    </tr>
+  `).join('');
+}
+
+async function loadInventory() {
+  state.inventory = await request('/dashboard/inventory');
+  $('#inventoryList').innerHTML = state.inventory.map((item) => `
     <article class="card">
       ${imageHtml(item.productImagePath)}
-      <div class="card-title">${item.factoryItemNo || '未填写厂家货号'}</div>
-      <div class="meta">条码：${item.barcode || ''}<br>描述：${item.description || ''}<br>内装：${item.innerPack || ''} / 装箱数：${item.cartonQty || 0}<br>体积：${item.cbmPerCarton || 0}</div>
+      <div class="card-title">${escapeHtml(item.name || item.factoryItemNo || '')}</div>
+      <div class="meta">条码：${escapeHtml(item.barcode || '')}<br>库存：${item.stock || 0}<br>货位：${escapeHtml(item.location || '待补充')}</div>
     </article>
-  `).join('') || '<p class="meta">暂无商品</p>';
+  `).join('') || '<p class="meta">暂无库存</p>';
 }
 
 async function loadDelivery() {
   const orders = await request('/orders');
+  const sortMode = $('#deliverySortMode')?.value || 'orderTime';
   const details = await Promise.all(orders.map((order) => request(`/orders/${order.id}`)));
-  $('#deliveryList').innerHTML = details.flatMap((order) => order.items.map((item, index) => deliveryCard(order, item, index))).join('') || '<p class="meta">暂无待送货物</p>';
+  state.deliveryOrders = details.sort((a, b) => String(a[sortMode] || '').localeCompare(String(b[sortMode] || '')));
+  const mode = $('#deliveryViewMode')?.value || 'list';
+  $('#deliveryList').classList.toggle('calendar-grid', mode === 'calendar');
+  $('#deliveryList').innerHTML = mode === 'calendar'
+    ? renderDeliveryCalendar(state.deliveryOrders)
+    : state.deliveryOrders.flatMap((order) => order.items.map((item, index) => deliveryCard(order, item, index))).join('') || '<p class="meta">暂无待送货物</p>';
   $$('.delivery-save').forEach((button) => button.addEventListener('click', () => saveDeliveryItem(button.dataset.orderId, Number(button.dataset.index))));
   $$('.signature-upload').forEach((input) => input.addEventListener('change', (event) => uploadSignature(input.dataset.orderId, Number(input.dataset.index), event.target.files)));
+}
+
+function renderDeliveryCalendar(orders) {
+  const groups = {};
+  orders.forEach((order) => {
+    const day = order.deliveryTime || '未定日期';
+    groups[day] = groups[day] || [];
+    groups[day].push(order);
+  });
+  return Object.entries(groups).map(([day, rows]) => `
+    <article class="card calendar-day">
+      <div class="card-title">${escapeHtml(day)}</div>
+      ${rows.map((order) => `<div class="meta">${escapeHtml(order.orderNo || String(order.id))} · ${escapeHtml(order.customerName || '')}</div>`).join('')}
+    </article>
+  `).join('');
 }
 
 function deliveryCard(order, item, index) {
@@ -686,12 +851,23 @@ async function exportCurrent(kind) {
   location.href = `/api/orders/${id}/export/${kind}`;
 }
 
+async function runGlobalSearch() {
+  const keyword = $('#globalSearchInput').value.trim();
+  if (!keyword) return;
+  const result = await request(`/search?q=${encodeURIComponent(keyword)}`);
+  $('#globalSearchResults').innerHTML = `
+    <article class="card"><div class="card-title">订单</div>${result.orders.map((order) => `<div class="meta"><button class="ghost edit-order" data-id="${order.id}">打开</button> ${escapeHtml(order.orderNo || String(order.id))} · ${escapeHtml(order.customerName || '')}</div>`).join('') || '<div class="meta">无结果</div>'}</article>
+    <article class="card"><div class="card-title">商品</div>${result.products.map((product) => `<div class="meta">${imageHtml(product.productImagePath)}${escapeHtml(product.factoryItemNo || '')} · ${escapeHtml(product.barcode || '')}<br>${escapeHtml(product.description || '')}</div>`).join('') || '<div class="meta">无结果</div>'}</article>
+  `;
+  $$('#globalSearchResults .edit-order').forEach((button) => button.addEventListener('click', () => editOrder(button.dataset.id)));
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
 async function refreshAll() {
-  await Promise.all([loadProducts(), loadOrders(), loadDelivery()]);
+  await Promise.all([loadProducts(), loadOrders(), loadInventory(), loadDelivery()]);
 }
 
 $$('.nav').forEach((tab) => tab.addEventListener('click', () => setTab(tab.dataset.tab)));
@@ -708,15 +884,42 @@ $('#addRow').addEventListener('click', () => {
 });
 $('#batchImages').addEventListener('click', () => $('#batchImagesInput').click());
 $('#batchImagesInput').addEventListener('change', async (event) => {
-  const uploaded = await uploadFiles('products', event.target.files);
-  uploaded.forEach((file) => state.items.push(emptyItem({ productImagePath: file.path, exportImagePath: file.path })));
-  renderSheet();
+  await handleBatchPhotos(event.target.files);
 });
+$('#batchItemNos').addEventListener('click', batchFillItemNos);
 $('#exportExcel').addEventListener('click', () => exportCurrent('excel'));
 $('#exportPdf').addEventListener('click', () => exportCurrent('pdf'));
 $('#refreshAll').addEventListener('click', refreshAll);
 $('#stopScanner').addEventListener('click', stopScanner);
 $('#saveDialogItem').addEventListener('click', saveDialogItem);
+$('#applyPhotoAssign').addEventListener('click', applyPhotoAssign);
+$('#orderSearchInput').addEventListener('input', renderOrderList);
+$('#globalSearchBtn').addEventListener('click', runGlobalSearch);
+$('#globalSearchInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') runGlobalSearch();
+});
+$('#deliveryViewMode').addEventListener('change', loadDelivery);
+$('#deliverySortMode').addEventListener('change', loadDelivery);
+document.addEventListener('click', () => {
+  $('#rowMenu').hidden = true;
+});
+$$('#rowMenu [data-menu-action]').forEach((button) => {
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    handleContextAction(button.dataset.menuAction);
+  });
+});
+$('#sheetDropZone').addEventListener('dragover', (event) => {
+  event.preventDefault();
+  $('#sheetDropZone').classList.add('drag-over');
+});
+$('#sheetDropZone').addEventListener('dragleave', () => $('#sheetDropZone').classList.remove('drag-over'));
+$('#sheetDropZone').addEventListener('drop', async (event) => {
+  event.preventDefault();
+  $('#sheetDropZone').classList.remove('drag-over');
+  const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith('image/'));
+  await handleBatchPhotos(files);
+});
 $('#saveRolesConfig').addEventListener('click', () => saveRolesConfig().then(() => alert('角色权限已保存')).catch((error) => alert(`角色配置格式错误：${error.message}`)));
 $('#saveTableConfig').addEventListener('click', () => saveTableConfig().then(() => alert('表格配置已保存')).catch((error) => alert(`表格配置格式错误：${error.message}`)));
 $('#resetConfig').addEventListener('click', resetConfig);
