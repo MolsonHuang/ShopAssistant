@@ -1,0 +1,15 @@
+{
+  "name": "店铺管理",
+  "appId": "__UNI__SHOPMANAGE__",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "description": "跨平台店铺管理系统",
+  "mp-weixin": {
+    "appid": ""
+  },
+  "h5": {
+    "devServer": {
+      "port": 8080
+    }
+  }
+}

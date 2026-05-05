@@ -1,0 +1,21 @@
+{
+  "name": "shop-management-frontend",
+  "version": "0.1.0",
+  "description": "uni-app cross-platform shop management frontend",
+  "scripts": {
+    "dev": "npm run dev:h5",
+    "dev:h5": "vue-cli-service uni-serve",
+    "build": "npm run build:h5",
+    "build:h5": "vue-cli-service uni-build",
+    "build:mp-weixin": "vue-cli-service uni-build -p mp-weixin",
+    "build:app": "vue-cli-service uni-build -p app"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "^3.6.0",
+    "vue": "^2.6.14"
+  },
+  "devDependencies": {
+    "@dcloudio/vue-cli-plugin-uni": "^2.1.0",
+    "@vue/cli-service": "^4.5.0"
+  }
+}

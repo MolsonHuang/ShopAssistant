@@ -1,0 +1,271 @@
+const db = require('./db');
+
+const productColumns = [
+  'barcode',
+  'factoryItemNo',
+  'productImagePath',
+  'exportImagePath',
+  'description',
+  'innerPack',
+  'cartonQty',
+  'cbmPerCarton',
+  'unitPieces',
+  'price',
+  'stock',
+  'location'
+];
+
+const orderColumns = [
+  'orderNo',
+  'type',
+  'customerName',
+  'customerPhone',
+  'contactName',
+  'paymentMethod',
+  'companyAddress',
+  'deliveryAddress',
+  'orderTime',
+  'deliveryTime',
+  'notes',
+  'frontMarkImagePath',
+  'sideMarkImagePath',
+  'barcodeFilePath',
+  'attachmentsJson'
+];
+
+function asNumber(value) {
+  return Number(value || 0);
+}
+
+function getPayload(row) {
+  if (!row) return null;
+  if (row.attachmentsJson) {
+    row.attachments = JSON.parse(row.attachmentsJson || '[]');
+  }
+  return row;
+}
+
+function addHistory(table, idName, id, action, payload) {
+  db.prepare(`INSERT INTO ${table} (${idName}, action, payload) VALUES (?, ?, ?)`).run(id, action, JSON.stringify(payload || {}));
+}
+
+function listProducts() {
+  return db.prepare('SELECT * FROM products ORDER BY updatedAt DESC, id DESC').all();
+}
+
+function getProduct(id) {
+  return db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+}
+
+function getProductByBarcode(barcode) {
+  return db.prepare('SELECT * FROM products WHERE barcode = ?').get(barcode);
+}
+
+function createProduct(payload) {
+  const data = normalizeProduct(payload);
+  const keys = productColumns;
+  const result = db
+    .prepare(`INSERT INTO products (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`)
+    .run(...keys.map((key) => data[key]));
+  const id = Number(result.lastInsertRowid);
+  addHistory('product_history', 'productId', id, 'created', payload);
+  return getProduct(id);
+}
+
+function updateProduct(id, payload) {
+  if (!getProduct(id)) return null;
+  const data = normalizeProduct(payload);
+  db.prepare(
+    `UPDATE products SET ${productColumns.map((key) => `${key} = ?`).join(', ')}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(...productColumns.map((key) => data[key]), id);
+  addHistory('product_history', 'productId', id, 'updated', payload);
+  return getProduct(id);
+}
+
+function normalizeProduct(payload) {
+  return {
+    barcode: payload.barcode || null,
+    factoryItemNo: payload.factoryItemNo || payload.name || '',
+    productImagePath: payload.productImagePath || payload.imageUrl || '',
+    exportImagePath: payload.exportImagePath || payload.productImagePath || payload.imageUrl || '',
+    description: payload.description || payload.productDescription || '',
+    innerPack: payload.innerPack || '',
+    cartonQty: Math.round(asNumber(payload.cartonQty)),
+    cbmPerCarton: asNumber(payload.cbmPerCarton),
+    unitPieces: Math.round(asNumber(payload.unitPieces)),
+    price: asNumber(payload.price),
+    stock: Math.round(asNumber(payload.stock)),
+    location: payload.location || ''
+  };
+}
+
+function listOrders() {
+  return db.prepare('SELECT * FROM orders WHERE deletedAt IS NULL ORDER BY createdAt DESC').all().map(getPayload);
+}
+
+function getOrder(id) {
+  const order = getPayload(db.prepare('SELECT * FROM orders WHERE id = ? AND deletedAt IS NULL').get(id));
+  if (!order) return null;
+  order.items = db.prepare('SELECT * FROM order_items WHERE orderId = ? ORDER BY sortOrder ASC, id ASC').all(id);
+  return order;
+}
+
+function createOrder(payload) {
+  const data = normalizeOrder(payload);
+  const keys = orderColumns;
+  const result = db
+    .prepare(`INSERT INTO orders (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`)
+    .run(...keys.map((key) => data[key]));
+  const id = Number(result.lastInsertRowid);
+  replaceOrderItems(id, payload.items || []);
+  addHistory('order_history', 'orderId', id, 'created', payload);
+  return getOrder(id);
+}
+
+function updateOrder(id, payload) {
+  if (!getOrder(id)) return null;
+  const data = normalizeOrder(payload);
+  db.prepare(
+    `UPDATE orders SET ${orderColumns.map((key) => `${key} = ?`).join(', ')}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(...orderColumns.map((key) => data[key]), id);
+  replaceOrderItems(id, payload.items || []);
+  addHistory('order_history', 'orderId', id, 'updated', payload);
+  return getOrder(id);
+}
+
+function deleteOrder(id) {
+  const order = getOrder(id);
+  if (!order) return false;
+  db.prepare('UPDATE orders SET deletedAt = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  addHistory('order_history', 'orderId', id, 'deleted', { id });
+  return true;
+}
+
+function updateOrderStatus(id, status, notes) {
+  if (!getOrder(id)) return null;
+  db.prepare('UPDATE orders SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?').run(status, id);
+  addHistory('order_history', 'orderId', id, 'status_changed', { status, notes });
+  return getOrder(id);
+}
+
+function normalizeOrder(payload) {
+  return {
+    orderNo: payload.orderNo || `SO-${Date.now()}`,
+    type: payload.type || 'order',
+    customerName: payload.customerName || '',
+    customerPhone: payload.customerPhone || payload.phone || '',
+    contactName: payload.contactName || '',
+    paymentMethod: payload.paymentMethod || '',
+    companyAddress: payload.companyAddress || '',
+    deliveryAddress: payload.deliveryAddress || payload.customerAddress || '',
+    orderTime: payload.orderTime || '',
+    deliveryTime: payload.deliveryTime || '',
+    notes: payload.notes || '',
+    frontMarkImagePath: payload.frontMarkImagePath || '',
+    sideMarkImagePath: payload.sideMarkImagePath || '',
+    barcodeFilePath: payload.barcodeFilePath || '',
+    attachmentsJson: JSON.stringify(payload.attachments || [])
+  };
+}
+
+function replaceOrderItems(orderId, items) {
+  db.prepare('DELETE FROM order_items WHERE orderId = ?').run(orderId);
+  const insert = db.prepare(
+    `INSERT INTO order_items (
+      orderId, productId, barcode, customerItemNo, factoryItemNo, productImagePath, exportImagePath,
+      productDescription, innerPack, cartonQty, cartons, unitPrice, cbmPerCarton, unitPieces,
+      totalCbm, totalPieces, totalAmount, sortOrder
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  items.forEach((item, index) => {
+    const normalized = normalizeOrderItem(item);
+    insert.run(
+      orderId,
+      normalized.productId,
+      normalized.barcode,
+      normalized.customerItemNo,
+      normalized.factoryItemNo,
+      normalized.productImagePath,
+      normalized.exportImagePath,
+      normalized.productDescription,
+      normalized.innerPack,
+      normalized.cartonQty,
+      normalized.cartons,
+      normalized.unitPrice,
+      normalized.cbmPerCarton,
+      normalized.unitPieces,
+      normalized.totalCbm,
+      normalized.totalPieces,
+      normalized.totalAmount,
+      index
+    );
+  });
+}
+
+function normalizeOrderItem(item) {
+  const cartonQty = Math.round(asNumber(item.cartonQty));
+  const cartons = Math.round(asNumber(item.cartons || item.quantity));
+  const unitPrice = asNumber(item.unitPrice || item.price);
+  const cbmPerCarton = asNumber(item.cbmPerCarton);
+  const unitPieces = Math.round(asNumber(item.unitPieces));
+  const totalPieces = Math.round(asNumber(item.totalPieces || cartonQty * cartons));
+  const totalCbm = asNumber(item.totalCbm || cbmPerCarton * cartons);
+  const totalAmount = asNumber(item.totalAmount || cartons * unitPrice);
+
+  return {
+    productId: item.productId ? Number(item.productId) : null,
+    barcode: item.barcode || '',
+    customerItemNo: item.customerItemNo || '',
+    factoryItemNo: item.factoryItemNo || '',
+    productImagePath: item.productImagePath || '',
+    exportImagePath: item.exportImagePath || item.productImagePath || '',
+    productDescription: item.productDescription || item.description || '',
+    innerPack: item.innerPack || '',
+    cartonQty,
+    cartons,
+    unitPrice,
+    cbmPerCarton,
+    unitPieces,
+    totalCbm,
+    totalPieces,
+    totalAmount
+  };
+}
+
+function getOrderHistory(orderId) {
+  return db.prepare('SELECT * FROM order_history WHERE orderId = ? ORDER BY createdAt DESC').all(orderId);
+}
+
+function salesRows() {
+  return listOrders().map((order) => {
+    const items = db.prepare('SELECT totalAmount FROM order_items WHERE orderId = ?').all(order.id);
+    const total = items.reduce((sum, item) => sum + asNumber(item.totalAmount), 0);
+    return { ...order, total };
+  });
+}
+
+function inventoryRows() {
+  return db.prepare(
+    `SELECT id, barcode, factoryItemNo AS name, barcode, stock, price, location, description,
+      innerPack, cartonQty, cbmPerCarton, unitPieces, productImagePath, exportImagePath
+     FROM products ORDER BY stock ASC`
+  ).all();
+}
+
+module.exports = {
+  listProducts,
+  getProduct,
+  getProductByBarcode,
+  createProduct,
+  updateProduct,
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrder,
+  deleteOrder,
+  updateOrderStatus,
+  getOrderHistory,
+  salesRows,
+  inventoryRows
+};
