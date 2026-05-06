@@ -1,0 +1,5 @@
+include *.md
+recursive-include shop_assistant *.json
+recursive-include shop_assistant *.py
+recursive-include shop_assistant *.js
+recursive-include shop_assistant *.html

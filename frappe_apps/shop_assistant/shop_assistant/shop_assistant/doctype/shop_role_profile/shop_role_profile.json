@@ -1,0 +1,38 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "field:profile_name",
+  "creation": "2026-05-06 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "profile_name",
+    "role",
+    "enabled",
+    "pages_json",
+    "doctypes_json",
+    "actions_json"
+  ],
+  "fields": [
+    { "fieldname": "profile_name", "fieldtype": "Data", "label": "Profile Name", "reqd": 1, "unique": 1 },
+    { "fieldname": "role", "fieldtype": "Link", "label": "Role", "options": "Role", "reqd": 1 },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1" },
+    { "fieldname": "pages_json", "fieldtype": "Code", "label": "Allowed Pages JSON", "options": "JSON" },
+    { "fieldname": "doctypes_json", "fieldtype": "Code", "label": "Allowed DocTypes JSON", "options": "JSON" },
+    { "fieldname": "actions_json", "fieldtype": "Code", "label": "Allowed Actions JSON", "options": "JSON" }
+  ],
+  "links": [],
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Role Profile",
+  "owner": "Administrator",
+  "permissions": [
+    { "role": "Shop Boss", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1 },
+    { "role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1 }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

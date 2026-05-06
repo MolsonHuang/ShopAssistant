@@ -1,0 +1,8 @@
+[
+  { "doctype": "Role", "role_name": "Shop Boss", "desk_access": 1 },
+  { "doctype": "Role", "role_name": "Shop Sales", "desk_access": 1 },
+  { "doctype": "Role", "role_name": "Shop Warehouse", "desk_access": 1 },
+  { "doctype": "Role", "role_name": "Shop Delivery", "desk_access": 1 },
+  { "doctype": "Role", "role_name": "Shop Supplier", "desk_access": 1 },
+  { "doctype": "Role", "role_name": "Shop Accountant", "desk_access": 1 }
+]

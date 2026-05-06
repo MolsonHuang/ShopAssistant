@@ -1,0 +1,45 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "field:template_name",
+  "creation": "2026-05-06 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "template_name",
+    "target_doctype",
+    "scenario",
+    "enabled",
+    "layout_section",
+    "columns_json",
+    "totals_json",
+    "row_height",
+    "page_setup_json"
+  ],
+  "fields": [
+    { "fieldname": "template_name", "fieldtype": "Data", "label": "Template Name", "reqd": 1, "unique": 1 },
+    { "fieldname": "target_doctype", "fieldtype": "Link", "label": "Target DocType", "options": "DocType", "reqd": 1 },
+    { "fieldname": "scenario", "fieldtype": "Select", "label": "Scenario", "options": "Order Entry\nOrder View\nProduct List\nExport Excel\nPrint PDF\nDelivery\nInventory", "default": "Order Entry" },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1" },
+    { "fieldname": "layout_section", "fieldtype": "Section Break", "label": "Layout" },
+    { "fieldname": "columns_json", "fieldtype": "Code", "label": "Columns JSON", "options": "JSON" },
+    { "fieldname": "totals_json", "fieldtype": "Code", "label": "Totals JSON", "options": "JSON" },
+    { "fieldname": "row_height", "fieldtype": "Int", "label": "Row Height", "default": "64" },
+    { "fieldname": "page_setup_json", "fieldtype": "Code", "label": "Page Setup JSON", "options": "JSON" }
+  ],
+  "links": [],
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Table Template",
+  "owner": "Administrator",
+  "permissions": [
+    { "role": "Shop Boss", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1 },
+    { "role": "Shop Sales", "read": 1 },
+    { "role": "Shop Warehouse", "read": 1 }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

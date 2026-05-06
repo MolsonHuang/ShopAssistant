@@ -1,0 +1,22 @@
+{
+  "align_labels_right": 0,
+  "creation": "2026-05-06 00:00:00.000000",
+  "custom_format": 1,
+  "disabled": 0,
+  "doc_type": "Shop Order",
+  "doctype": "Print Format",
+  "font_size": 11,
+  "html": "<style>.shop-order-a4{font-family:Arial,sans-serif;font-size:11px;color:#111}.shop-order-a4 h1{font-size:18px;text-align:center;margin:0 0 10px}.shop-order-a4 table{width:100%;border-collapse:collapse}.shop-order-a4 th,.shop-order-a4 td{border:1px solid #222;padding:4px;vertical-align:middle}.shop-order-a4 th{background:#f3f3f3}.shop-order-a4 .meta td{border:0;padding:2px 4px}.shop-order-a4 img{max-width:70px;max-height:70px;object-fit:contain}.shop-order-a4 .total td{font-weight:bold}</style><div class=\"shop-order-a4\"><h1>ORDER</h1><table class=\"meta\"><tr><td>Order No: {{ doc.order_no }}</td><td>Customer: {{ doc.customer_name }}</td><td>Phone: {{ doc.phone or '' }}</td></tr><tr><td>Contact: {{ doc.contact_person or '' }}</td><td>Payment: {{ doc.payment_method or '' }}</td><td>Status: {{ doc.status }}</td></tr><tr><td>Order Time: {{ frappe.format(doc.order_date, {'fieldtype':'Datetime'}) if doc.order_date else '' }}</td><td>Delivery Time: {{ frappe.format(doc.delivery_date, {'fieldtype':'Datetime'}) if doc.delivery_date else '' }}</td><td>Payment Status: {{ doc.payment_status }}</td></tr><tr><td colspan=\"3\">Delivery Address: {{ doc.delivery_address or '' }}</td></tr><tr><td colspan=\"3\">Remarks: {{ doc.notes or '' }}</td></tr></table><br><table><thead><tr><th>No.</th><th>Customer Item</th><th>Factory Item</th><th>Photo</th><th>Description</th><th>Inner</th><th>QTY/CTN</th><th>CTN</th><th>Price</th><th>CBM/CTN</th><th>Total CBM</th><th>Pieces</th><th>Amount</th></tr></thead><tbody>{% for row in doc.items %}<tr><td>{{ loop.index }}</td><td>{{ row.customer_item_no or '' }}</td><td>{{ row.factory_item_no or '' }}</td><td>{% if row.product_image %}<img src=\"{{ row.product_image }}\">{% endif %}</td><td>{{ row.product_description or '' }}</td><td>{{ row.inner_pack or '' }}</td><td>{{ row.carton_qty or 0 }}</td><td>{{ row.cartons or 0 }}</td><td>{{ frappe.format(row.unit_price, {'fieldtype':'Currency'}) }}</td><td>{{ row.cbm_per_carton or 0 }}</td><td>{{ row.total_cbm or 0 }}</td><td>{{ row.total_pieces or 0 }}</td><td>{{ frappe.format(row.amount, {'fieldtype':'Currency'}) }}</td></tr>{% endfor %}<tr class=\"total\"><td colspan=\"10\">Total</td><td>{{ doc.total_cbm or 0 }}</td><td>{{ doc.total_pieces or 0 }}</td><td>{{ frappe.format(doc.total_amount, {'fieldtype':'Currency'}) }}</td></tr></tbody></table><br><table><tr><th>Front Mark</th><th>Side Mark</th><th>Barcode File</th></tr><tr><td>{% if doc.front_mark_image %}<img src=\"{{ doc.front_mark_image }}\">{% endif %}</td><td>{% if doc.side_mark_image %}<img src=\"{{ doc.side_mark_image }}\">{% endif %}</td><td>{{ doc.barcode_file or '' }}</td></tr></table></div>",
+  "idx": 0,
+  "line_breaks": 0,
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Order A4",
+  "owner": "Administrator",
+  "print_format_builder": 0,
+  "print_format_type": "Jinja",
+  "raw_printing": 0,
+  "show_section_headings": 0,
+  "standard": "Yes"
+}

@@ -1,0 +1,44 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "format:DT-{delivery_date}-{#####}",
+  "creation": "2026-05-06 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "delivery_date",
+    "shop_order",
+    "delivery_person",
+    "status",
+    "delivery_address",
+    "items",
+    "signature_file",
+    "notes"
+  ],
+  "fields": [
+    { "fieldname": "delivery_date", "fieldtype": "Date", "label": "Delivery Date", "reqd": 1 },
+    { "fieldname": "shop_order", "fieldtype": "Link", "label": "Shop Order", "options": "Shop Order", "reqd": 1 },
+    { "fieldname": "delivery_person", "fieldtype": "Link", "label": "Delivery Person", "options": "User" },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Pending\nDelivering\nCompleted\nReturned", "default": "Pending" },
+    { "fieldname": "delivery_address", "fieldtype": "Small Text", "label": "Delivery Address" },
+    { "fieldname": "items", "fieldtype": "Table", "label": "Items", "options": "Shop Delivery Task Item" },
+    { "fieldname": "signature_file", "fieldtype": "Attach", "label": "Signature File" },
+    { "fieldname": "notes", "fieldtype": "Small Text", "label": "Notes" }
+  ],
+  "links": [],
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Delivery Task",
+  "owner": "Administrator",
+  "permissions": [
+    { "role": "Shop Boss", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "print": 1 },
+    { "role": "Shop Warehouse", "read": 1, "write": 1, "create": 1, "export": 1, "print": 1 },
+    { "role": "Shop Delivery", "read": 1, "write": 1, "create": 1, "print": 1 },
+    { "role": "Shop Sales", "read": 1 }
+  ],
+  "sort_field": "delivery_date",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

@@ -1,0 +1,41 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "format:SPO-{supplier}-{#####}",
+  "creation": "2026-05-06 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "supplier",
+    "shop_order",
+    "deadline",
+    "status",
+    "progress_percent",
+    "progress_notes",
+    "production_file"
+  ],
+  "fields": [
+    { "fieldname": "supplier", "fieldtype": "Link", "label": "Supplier", "options": "Supplier", "reqd": 1 },
+    { "fieldname": "shop_order", "fieldtype": "Link", "label": "Shop Order", "options": "Shop Order" },
+    { "fieldname": "deadline", "fieldtype": "Date", "label": "Deadline" },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nSent\nIn Production\nDelayed\nCompleted\nCancelled", "default": "Draft" },
+    { "fieldname": "progress_percent", "fieldtype": "Percent", "label": "Progress Percent" },
+    { "fieldname": "progress_notes", "fieldtype": "Small Text", "label": "Progress Notes" },
+    { "fieldname": "production_file", "fieldtype": "Attach", "label": "Production File" }
+  ],
+  "links": [],
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Supplier Production Order",
+  "owner": "Administrator",
+  "permissions": [
+    { "role": "Shop Boss", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "print": 1 },
+    { "role": "Shop Sales", "read": 1, "write": 1, "create": 1, "print": 1 },
+    { "role": "Shop Supplier", "read": 1, "write": 1, "print": 1 }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}
