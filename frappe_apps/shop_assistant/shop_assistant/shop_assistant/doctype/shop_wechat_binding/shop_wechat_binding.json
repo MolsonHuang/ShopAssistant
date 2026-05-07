@@ -1,0 +1,42 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "field:wechat_openid",
+  "creation": "2026-05-06 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "wechat_openid",
+    "wechat_unionid",
+    "user",
+    "enabled",
+    "role_profile",
+    "nickname",
+    "last_login",
+    "notes"
+  ],
+  "fields": [
+    { "fieldname": "wechat_openid", "fieldtype": "Data", "label": "WeChat OpenID", "reqd": 1, "unique": 1, "read_only": 1 },
+    { "fieldname": "wechat_unionid", "fieldtype": "Data", "label": "WeChat UnionID", "read_only": 1 },
+    { "fieldname": "user", "fieldtype": "Link", "label": "ERPNext User", "options": "User" },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "0" },
+    { "fieldname": "role_profile", "fieldtype": "Link", "label": "Shop Role Profile", "options": "Shop Role Profile" },
+    { "fieldname": "nickname", "fieldtype": "Data", "label": "Nickname" },
+    { "fieldname": "last_login", "fieldtype": "Datetime", "label": "Last Login", "read_only": 1 },
+    { "fieldname": "notes", "fieldtype": "Small Text", "label": "Notes" }
+  ],
+  "links": [],
+  "modified": "2026-05-06 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Shop Assistant",
+  "name": "Shop Wechat Binding",
+  "owner": "Administrator",
+  "permissions": [
+    { "role": "Shop Boss", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1 },
+    { "role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1 }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}
